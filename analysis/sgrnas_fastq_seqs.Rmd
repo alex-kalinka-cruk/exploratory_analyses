@@ -1,0 +1,56 @@
+---
+title: 'CRISPR exploratory analysis: sgRNA counts and FASTQ seqs'
+author: "Alex Kalinka"
+date: ""
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+# Setup
+
+```{r,echo=F}
+options(warn=-1)
+
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+
+```
+
+# Counts
+
+```{r}
+# Count sgRNAs per gene.
+count_sgrnas <- function(file, rename){
+  if(rename){
+    counts <- read.table(file, stringsAsFactors = F) %>%
+      rename(sgRNA = V1, gene = V2)
+  }else{
+    counts <- read.table(file, header = T, stringsAsFactors = F)
+  }
+  counts %<>%
+    group_by(gene) %>%
+    mutate(sgRNA_number = n()) %>%
+    ungroup()
+  return(counts)
+}
+
+# HT29.
+counts_plasmid.1 <- count_sgrnas("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/Plasmid_AZ_1.s_1.counts", rename=T)
+counts_plasmid.2 <- count_sgrnas("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/Plasmid_AZ_2.s_1.counts", rename=T)
+counts_plasmid.sanger <- count_sgrnas("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/Plasmid_Sanger.s_1.counts", rename=T)
+counts_ps <- count_sgrnas("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/combined_counts.txt",
+                          rename = F)
+
+
+```
+
