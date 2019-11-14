@@ -1,7 +1,7 @@
 ---
-title: 'CRISPR exploratory analysis: sgRNA counts and FASTQ seqs'
+title: 'CRISPR sgRNA Library exploratory analysis: Kusa v3'
 author: "Alex Kalinka"
-date: ""
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
     code_folding: hide
@@ -21,12 +21,16 @@ options(warn=-1)
 suppressMessages(library(knitr))
 suppressMessages(library(tidyr))
 suppressMessages(library(magrittr))
+suppressMessages(library(readr))
 suppressMessages(library(ggplot2))
 suppressMessages(library(dplyr))
 
+base_path.data <- file.path("~","data","az_cruk")
+base_path.ht29 <- file.path(base_path.data,"ht29")
+
 ```
 
-# Counts
+# Per-gene sgRNA counts
 
 ```{r}
 # Count sgRNAs per gene.
@@ -39,18 +43,94 @@ count_sgrnas <- function(file, rename){
   }
   counts %<>%
     group_by(gene) %>%
-    mutate(sgRNA_number = n()) %>%
-    ungroup()
+    summarise(sgRNA_per_gene_count = n()) %>%
+    ungroup() %>%
+    arrange(gene)
   return(counts)
 }
 
-# HT29.
-counts_plasmid.1 <- count_sgrnas("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/Plasmid_AZ_1.s_1.counts", rename=T)
-counts_plasmid.2 <- count_sgrnas("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/Plasmid_AZ_2.s_1.counts", rename=T)
-counts_plasmid.sanger <- count_sgrnas("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/Plasmid_Sanger.s_1.counts", rename=T)
-counts_ps <- count_sgrnas("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/combined_counts.txt",
-                          rename = F)
+# Plot sgRNA per-gene count histograms.
+plot_sgrna_hist <- function(data, source){
+  pl <- data %>%
+    ggplot(aes(sgRNA_per_gene_count)) +
+    geom_histogram() +
+    xlim(0,10) +
+    ggtitle(paste("sgRNA per-gene counts:",source))
+  suppressWarnings(print(pl))
+}
 
+# Summarise count distribution.
+summarise.sgrna_counts <- function(data){
+  
+}
 
 ```
+
+Both the plasmid count files from individual experiments and the Kusa v3 library exhibit the same distribution of per-gene sgRNA counts indicating that ~17% of the genes have fewer than 6 sgRNAs, ~4% of the genes have more than 6 sgRNAs, and 431 genes have exactly 1 sgRNA associated with them.
+
+## HT29 {.tabset}
+
+### Plasmid: Sanger
+
+```{r}
+counts_plasmid.sanger <- count_sgrnas(file.path(base_path.ht29,
+                                                "crisprn","plasmid_test","counts","Plasmid_Sanger.s_1.counts"),
+                                      rename=T)
+
+plot_sgrna_hist(counts_plasmid.sanger, "HT29; Plasmid Sanger")
+
+```
+
+### Plasmid: replicate 1
+
+```{r}
+counts_plasmid.1 <- count_sgrnas(file.path(base_path.ht29,
+                                                "crisprn","plasmid_test","counts","Plasmid_AZ_1.s_1.counts"), 
+                                 rename=T)
+
+plot_sgrna_hist(counts_plasmid.1, "HT29; Plasmid Replicate 1")
+
+```
+
+### Plasmid: replicate 2
+
+```{r}
+counts_plasmid.2 <- count_sgrnas(file.path(base_path.ht29,
+                                                "crisprn","plasmid_test","counts","Plasmid_AZ_2.s_1.counts"), 
+                                 rename=T)
+
+plot_sgrna_hist(counts_plasmid.2, "HT29; Plasmid Replicate 2")
+
+```
+
+### Plasmid: post-selection
+
+```{r}
+counts_plasmid.2 <- count_sgrnas(file.path(base_path.ht29,
+                                                "crisprn","plasmid_test","counts","combined_counts.txt"), 
+                                 rename=T)
+
+plot_sgrna_hist(counts_plasmid.2, "HT29; Post-selection")
+
+```
+
+
+## Kusa v3: sgRNA library
+
+```{r}
+kusa.v3 <- suppressMessages(read_table2(file.path(base_path.data,"cleanr.tsv"))) %>%
+  group_by(EXONE) %>%
+  summarise(sgRNA_per_gene_count = n()) %>%
+  ungroup() %>%
+  arrange(EXONE) %>%
+  rename(gene = EXONE)
+
+plot_sgrna_hist(kusa.v3, "Kusa v3 Original Library")
+
+```
+
+# Orphan sgRNAs
+
+Defined as sgRNAs that don't map to any genes (blank in original library file)
+
 
