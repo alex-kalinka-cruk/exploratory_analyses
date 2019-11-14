@@ -1759,11 +1759,11 @@ div.tocify {
 <div id="kusa-v3-sgrna-library" class="section level2">
 <h2><span class="header-section-number">1.2</span> Kusa v3: sgRNA library</h2>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb6-1" data-line-number="1">kusa.v3 &lt;-<span class="st"> </span><span class="kw">suppressMessages</span>(<span class="kw">suppressWarnings</span>(<span class="kw">read_table2</span>(<span class="kw">file.path</span>(base_path.data,<span class="st">&quot;cleanr.tsv&quot;</span>)))) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb6-2" data-line-number="2"><span class="st">  </span><span class="kw">group_by</span>(EXONE) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb6-2" data-line-number="2"><span class="st">  </span><span class="kw">group_by</span>(GENES) <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb6-3" data-line-number="3"><span class="st">  </span><span class="kw">summarise</span>(<span class="dt">sgRNA_per_gene_count =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb6-4" data-line-number="4"><span class="st">  </span><span class="kw">ungroup</span>() <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb6-5" data-line-number="5"><span class="st">  </span><span class="kw">arrange</span>(EXONE) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb6-6" data-line-number="6"><span class="st">  </span><span class="kw">rename</span>(<span class="dt">gene =</span> EXONE) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb6-5" data-line-number="5"><span class="st">  </span><span class="kw">arrange</span>(GENES) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb6-6" data-line-number="6"><span class="st">  </span><span class="kw">rename</span>(<span class="dt">gene =</span> GENES) <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb6-7" data-line-number="7"><span class="st">  </span><span class="kw">filter</span>(gene <span class="op">!=</span><span class="st"> &quot;Control&quot;</span> <span class="op">&amp;</span><span class="st"> </span>gene <span class="op">!=</span><span class="st"> &quot;.&quot;</span>)</a>
 <a class="sourceLine" id="cb6-8" data-line-number="8"></a>
 <a class="sourceLine" id="cb6-9" data-line-number="9"><span class="kw">plot_sgrna_hist</span>(kusa.v3, <span class="st">&quot;Kusa v3 Original Library&quot;</span>)</a></code></pre></div>
@@ -1824,10 +1824,10 @@ div.tocify {
 </div>
 <div id="orphan-sgrnas" class="section level1">
 <h1><span class="header-section-number">2</span> Orphan sgRNAs</h1>
-<p>Defined as sgRNAs that don’t have gene IDs in the <code>EXONE</code> column of the original Kusa v3 file and are missing in the Plasmid count files (entered as ‘.’), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).</p>
+<p>Defined as sgRNAs that don’t have gene IDs in the <code>GENES</code> column of the original Kusa v3 file and are missing in the Plasmid count files (entered as ‘.’), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb8-1" data-line-number="1">orphans &lt;-<span class="st"> </span><span class="kw">suppressMessages</span>(<span class="kw">suppressWarnings</span>(<span class="kw">read_table2</span>(<span class="kw">file.path</span>(base_path.data,<span class="st">&quot;cleanr.tsv&quot;</span>)))) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb8-2" data-line-number="2"><span class="st">  </span><span class="kw">filter</span>(EXONE <span class="op">==</span><span class="st"> &quot;.&quot;</span>) <span class="op">%&gt;%</span></a>
-<a class="sourceLine" id="cb8-3" data-line-number="3"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">gene =</span> <span class="kw">gsub</span>(<span class="st">&quot;^(</span><span class="ch">\\</span><span class="st">S+?)_.*$&quot;</span>,<span class="st">&quot;</span><span class="ch">\\</span><span class="st">1&quot;</span>,GENES))</a>
+<a class="sourceLine" id="cb8-2" data-line-number="2"><span class="st">  </span><span class="kw">filter</span>(GENES <span class="op">==</span><span class="st"> &quot;.&quot;</span>) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb8-3" data-line-number="3"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">gene =</span> <span class="kw">gsub</span>(<span class="st">&quot;^(</span><span class="ch">\\</span><span class="st">S+?)_.*$&quot;</span>,<span class="st">&quot;</span><span class="ch">\\</span><span class="st">1&quot;</span>,CODE))</a>
 <a class="sourceLine" id="cb8-4" data-line-number="4"></a>
 <a class="sourceLine" id="cb8-5" data-line-number="5"><span class="kw">kable</span>(<span class="kw">table</span>(orphans<span class="op">$</span>gene))</a></code></pre></div>
 <table>

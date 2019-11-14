@@ -132,11 +132,11 @@ plot_sgrna_hist(counts_ps, "HT29; Post-selection")
 
 ```{r}
 kusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
-  group_by(EXONE) %>%
+  group_by(GENES) %>%
   summarise(sgRNA_per_gene_count = n()) %>%
   ungroup() %>%
-  arrange(EXONE) %>%
-  rename(gene = EXONE) %>%
+  arrange(GENES) %>%
+  rename(gene = GENES) %>%
   filter(gene != "Control" & gene != ".")
 
 plot_sgrna_hist(kusa.v3, "Kusa v3 Original Library")
@@ -152,12 +152,12 @@ kable(summarise.sgrna_counts(kusa.v3,"Kusa_v3"))
 
 # Orphan sgRNAs
 
-Defined as sgRNAs that don't have gene IDs in the `EXONE` column of the original Kusa v3 file and are missing in the Plasmid count files (entered as '.'), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).
+Defined as sgRNAs that don't have gene IDs in the `GENES` column of the original Kusa v3 file and are missing in the Plasmid count files (entered as '.'), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).
 
 ```{r}
 orphans <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
-  filter(EXONE == ".") %>%
-  mutate(gene = gsub("^(\\S+?)_.*$","\\1",GENES))
+  filter(GENES == ".") %>%
+  mutate(gene = gsub("^(\\S+?)_.*$","\\1",CODE))
 
 kable(table(orphans$gene))
 
