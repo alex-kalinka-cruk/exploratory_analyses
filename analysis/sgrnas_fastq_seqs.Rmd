@@ -27,6 +27,11 @@ suppressMessages(library(dplyr))
 base_path.data <- file.path("~","data","az_cruk")
 base_path.ht29 <- file.path(base_path.data,"ht29")
 
+kusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
+  rowwise() %>%
+  mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/20) %>%
+  ungroup()
+
 ```
 
 # Per-gene sgRNA counts
@@ -131,7 +136,7 @@ plot_sgrna_hist(counts_ps, "HT29; Post-selection")
 ## Kusa v3: sgRNA library
 
 ```{r}
-kusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
+kusa.v3.counts <- kusa.v3 %>%
   group_by(GENES) %>%
   summarise(sgRNA_per_gene_count = n()) %>%
   ungroup() %>%
@@ -139,7 +144,7 @@ kusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.dat
   rename(gene = GENES) %>%
   filter(gene != "Control" & gene != ".")
 
-plot_sgrna_hist(kusa.v3, "Kusa v3 Original Library")
+plot_sgrna_hist(kusa.v3.counts, "Kusa v3 Original Library")
 
 ```
 
@@ -155,11 +160,28 @@ kable(summarise.sgrna_counts(kusa.v3,"Kusa_v3"))
 Defined as sgRNAs that don't have gene IDs in the `GENES` column of the original Kusa v3 file and are missing in the Plasmid count files (entered as '.'), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).
 
 ```{r}
-orphans <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
+orphans <- kusa.v3 %>%
   filter(GENES == ".") %>%
   mutate(gene = gsub("^(\\S+?)_.*$","\\1",CODE))
 
 kable(table(orphans$gene))
 
 ```
+
+# GC content vs counts
+
+```{r}
+plasmid.1 <- read.table(file.path(base_path.ht29,"crisprn","plasmid_test","counts","Plasmid_AZ_1.s_1.counts"),
+                        stringsAsFactors = F) %>%
+  left_join(kusa.v3, by = c("V1" = "CODE"))
+
+ggplot(plasmid.1, aes(GC_percent, V3, group = GC_percent)) +
+  geom_point() +
+  geom_boxplot() +
+  geom_smooth() +
+  ylim(0,2000)
+
+```
+
+
 
