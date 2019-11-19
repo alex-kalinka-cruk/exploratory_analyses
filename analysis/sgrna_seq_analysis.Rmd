@@ -1,0 +1,59 @@
+---
+title: 'CRISPR sgRNA Library composition: Yusa v3 (Knockout)'
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+
+```{r,echo=F}
+options(warn=-1)
+
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(readr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+
+base_path.data <- file.path("~","data","az_cruk")
+base_path.ht29 <- file.path(base_path.data,"ht29")
+
+# 'cleanr.tsv' file from Miike.
+yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
+  rowwise() %>%
+  mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/20) %>%
+  ungroup()
+
+```
+
+# GC content vs counts
+
+```{r}
+plasmid.1 <- read.table(file.path(base_path.ht29,"crisprn","plasmid_test","counts","Plasmid_AZ_1.s_1.counts"),
+                        stringsAsFactors = F) %>%
+  left_join(yusa.v3, by = c("V1" = "CODE")) %>%
+  group_by(GC_percent) %>%
+  mutate(median_count = as.integer(round(median(V3,na.rm=T)))) %>%
+  ungroup()
+
+ggplot(plasmid.1, aes(GC_percent, V3)) +
+  geom_count(aes(color = ..n..)) +
+  stat_summary(aes(y = V3), fun.y = median, color = "red", geom="point") +
+  geom_smooth() +
+  ylim(0,2000) +
+  ylab("sgRNA count") +
+  ggtitle("HT29: Plasmid Count rep 1 vs GC %")
+
+```
+
+
+

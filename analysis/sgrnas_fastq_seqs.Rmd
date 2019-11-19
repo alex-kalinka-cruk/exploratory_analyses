@@ -1,5 +1,5 @@
 ---
-title: 'CRISPR sgRNA Library exploratory analysis: Kusa v3'
+title: 'CRISPR sgRNA Library composition: Yusa v3 (Knockout)'
 author: "Alex Kalinka"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -27,10 +27,22 @@ suppressMessages(library(dplyr))
 base_path.data <- file.path("~","data","az_cruk")
 base_path.ht29 <- file.path(base_path.data,"ht29")
 
-kusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
+# 'cleanr.tsv' file from Miike.
+yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
   rowwise() %>%
   mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/20) %>%
   ungroup()
+
+```
+
+# Yusa v3 summary
+
+```{r}
+kable(yusa.v3 %>%
+        summarise(Number_of_sgRNAs = n(),
+                  Number_of_non_targeting_Controls = sum(grepl("Control",CODE)),
+                  Number_of_genes = length(unique(GENES)))
+)
 
 ```
 
@@ -133,10 +145,10 @@ plot_sgrna_hist(counts_ps, "HT29; Post-selection")
 ```
 
 
-## Kusa v3: sgRNA library
+## Yusa v3: sgRNA library
 
 ```{r}
-kusa.v3.counts <- kusa.v3 %>%
+yusa.v3.counts <- yusa.v3 %>%
   group_by(GENES) %>%
   summarise(sgRNA_per_gene_count = n()) %>%
   ungroup() %>%
@@ -144,42 +156,27 @@ kusa.v3.counts <- kusa.v3 %>%
   rename(gene = GENES) %>%
   filter(gene != "Control" & gene != ".")
 
-plot_sgrna_hist(kusa.v3.counts, "Kusa v3 Original Library")
+plot_sgrna_hist(yusa.v3.counts, "Yusa v3 Original Library")
 
 ```
 
 ## Summary
 
 ```{r}
-kable(summarise.sgrna_counts(kusa.v3,"Kusa_v3"))
+kable(summarise.sgrna_counts(yusa.v3,"Yusa_v3"))
 
 ```
 
 # Orphan sgRNAs
 
-Defined as sgRNAs that don't have gene IDs in the `GENES` column of the original Kusa v3 file and are missing in the Plasmid count files (entered as '.'), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).
+Defined as sgRNAs that don't have gene IDs in the `GENES` column of the original Yusa v3 file and are missing in the Plasmid count files (entered as '.'), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).
 
 ```{r}
-orphans <- kusa.v3 %>%
+orphans <- yusa.v3 %>%
   filter(GENES == ".") %>%
   mutate(gene = gsub("^(\\S+?)_.*$","\\1",CODE))
 
 kable(table(orphans$gene))
-
-```
-
-# GC content vs counts
-
-```{r}
-plasmid.1 <- read.table(file.path(base_path.ht29,"crisprn","plasmid_test","counts","Plasmid_AZ_1.s_1.counts"),
-                        stringsAsFactors = F) %>%
-  left_join(kusa.v3, by = c("V1" = "CODE"))
-
-ggplot(plasmid.1, aes(GC_percent, V3, group = GC_percent)) +
-  geom_point() +
-  geom_boxplot() +
-  geom_smooth() +
-  ylim(0,2000)
 
 ```
 
