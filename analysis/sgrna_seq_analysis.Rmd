@@ -42,6 +42,8 @@ yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.dat
 
 # Annotations
 
+* Variance in counts between guides within genes vs number of transcripts impacted.
+
 ```{r,eval=F}
 # Annotations of interest.
 anns <- c("hg38_genes_promoters","hg38_genes_cds",
@@ -68,7 +70,7 @@ yusa.annot <- data.frame(annotate_regions(regions = yusa.granges, annotations = 
   filter(!is.na(annot.symbol)) %>%
   mutate(feature = gsub("^(\\S+?):.*$","\\1",annot.id)) %>%
   group_by(CODE) %>%
-  summarise(sgRNA = CODE[1], gene = GENES[1], 
+  summarise(gene = GENES[1], 
             genes.hit = paste(unique(annot.symbol),collapse=";"),
             chrom = seqnames[1], start = start[1], end = end[1],
             seq = seq[1], num_transcripts = length(unique(annot.tx_id)),
@@ -97,6 +99,4 @@ ggplot(plasmid.1, aes(GC_percent, V3)) +
   ggtitle("HT29: Plasmid Count rep 1 vs GC %")
 
 ```
-
-
 
