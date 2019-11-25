@@ -23,15 +23,45 @@ suppressMessages(library(magrittr))
 suppressMessages(library(readr))
 suppressMessages(library(ggplot2))
 suppressMessages(library(dplyr))
+suppressMessages(library(GenomicRanges))
+suppressMessages(library(anottatr))
+
+select <- dplyr::select
+filter <- dplyr::filter
 
 base_path.data <- file.path("~","data","az_cruk")
 base_path.ht29 <- file.path(base_path.data,"ht29")
 
-# 'cleanr.tsv' file from Miike.
+# 'cleanr.tsv' file from Miika.
 yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
   rowwise() %>%
   mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/20) %>%
   ungroup()
+
+```
+
+# Annotations
+
+```{r,eval=F}
+# Annotations of interest.
+anns <- c("hg38_genes_promoters","hg38_genes_cds",
+          "hg38_genes_introns","hg38_genes_exons",
+          "hg38_genes_5UTRs","hg38_genes_3UTRs")
+annotations <- build_annotations(genome = "hg38", annotations = anns)
+
+# Process sgRNA coordinates into GRanges object.
+yusa.granges <- yusa.v3 %>%
+  select(CHRM,STARTpos,ENDpos,STRAND,CODE,GENES,seq) %>%
+  mutate(CHRM = paste("chr",CHRM,sep="")) %>%
+  makeGRangesFromDataFrame(keep.extra.columns = T,
+                           seqnames.field = "CHRM",
+                           start.field = "STARTpos",
+                           end.field = "ENDpos",
+                           strand.field = "STRAND")
+
+# Annotate sgRNAs.
+yusa.annot <- data.frame(annotate_regions(regions = yusa.granges, annotations = annotations, 
+                               ignore.strand = F, quiet = F))
 
 ```
 
