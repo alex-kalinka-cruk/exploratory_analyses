@@ -23,8 +23,6 @@ suppressMessages(library(magrittr))
 suppressMessages(library(readr))
 suppressMessages(library(ggplot2))
 suppressMessages(library(dplyr))
-suppressMessages(library(GenomicRanges))
-suppressMessages(library(annotatr))
 
 select <- dplyr::select
 filter <- dplyr::filter
@@ -35,8 +33,11 @@ base_path.ht29 <- file.path(base_path.data,"ht29")
 # 'cleanr.tsv' file from Miika.
 yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
   rowwise() %>%
-  mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/20) %>%
+  mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/19) %>%
   ungroup()
+
+# Cached since expensive to re-create.
+yusa.annot <- readRDS(file.path(base_path.data,"yusa.v3.annotated.rds"))
 
 ```
 
@@ -44,10 +45,14 @@ yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.dat
 
 * Variance in counts between guides within genes vs number of transcripts impacted.
 
+## Setup
+
 ```{r,eval=F}
+suppressMessages(library(GenomicRanges))
+suppressMessages(library(annotatr))
+
 # Annotations of interest.
-anns <- c("hg38_genes_promoters","hg38_genes_cds",
-          "hg38_genes_introns","hg38_genes_exons",
+anns <- c("hg38_genes_promoters","hg38_genes_cds","hg38_genes_exons",
           "hg38_genes_5UTRs","hg38_genes_3UTRs",
           "hg38_genes_firstexons",
           "hg38_genes_intronexonboundaries",
@@ -56,8 +61,10 @@ annotations <- build_annotations(genome = "hg38", annotations = anns)
 
 # Process sgRNA coordinates into GRanges object.
 yusa.granges <- yusa.v3 %>%
+  filter(!grepl("Control",CODE)) %>%
   select(CHRM,STARTpos,ENDpos,STRAND,CODE,GENES,seq) %>%
-  mutate(CHRM = paste("chr",CHRM,sep="")) %>%
+  mutate(CHRM = paste("chr",CHRM,sep=""),
+         STARTpos = as.integer(STARTpos), ENDpos = as.integer(ENDpos)) %>%
   makeGRangesFromDataFrame(keep.extra.columns = T,
                            seqnames.field = "CHRM",
                            start.field = "STARTpos",
@@ -73,12 +80,77 @@ yusa.annot <- data.frame(annotate_regions(regions = yusa.granges, annotations = 
   summarise(gene = GENES[1], 
             genes.hit = paste(unique(annot.symbol),collapse=";"),
             chrom = seqnames[1], start = start[1], end = end[1],
-            seq = seq[1], num_transcripts = length(unique(annot.tx_id)),
+            seq = seq[1], 
+            num_transcripts_hit = length(unique(annot.tx_id[which(annot.symbol==gene)])),
             num_genes = length(unique(annot.symbol)),
-            features = paste(sort(unique(feature)),collapse=";")) %>%
+            features = paste(sort(unique(feature)),collapse=";"),
+            CDS = grepl("CDS",features),
+            promoter = grepl("promoter",features),
+            transcript_ids_hit = paste(annot.type,collapse=";")) %>%
   ungroup()
 
 ```
+
+```{r,eval=F}
+# Get the total number of transcripts annotated to each gene.
+suppressMessages(library(biomaRt))
+
+ensembl = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+ens_tx_ids <- getBM(filters = c("external_gene_name"),
+                 values = yusa.annot$gene,
+                 attributes = c("external_gene_name","ensembl_gene_id","ensembl_transcript_id"),
+                 mart = ensembl) %>%
+  group_by(ensembl_gene_id) %>%
+  summarise(gene = external_gene_name[1],
+            transcript_ids = paste(ensembl_transcript_id,collapse=";"),
+            total_num_transcripts = n()) %>%
+  ungroup()
+
+# Finalise sgRNA annotations.
+yusa.annot %<>%
+  left_join(ens_tx_ids, by = "gene") %>%
+  mutate(num_transcripts_not_hit = ifelse(num_transcripts_hit >= total_num_transcripts,
+                                          0, total_num_transcripts - num_transcripts_hit),
+         percent_transcripts_not_hit = 100*num_transcripts_not_hit/total_num_transcripts) %>%
+  # Summarise number of tx not hit per gene.
+  group_by(gene) %>%
+  mutate(total_tx_not_hit.per_gene = sum(num_transcripts_not_hit),
+         median_tx_not_hit.per_gene = median(num_transcripts_not_hit)) %>%
+  ungroup()
+
+```
+
+## Post-selection counts: HT29 lethality screen
+
+```{r}
+# FGC_AZ_001_1 and FGC_AZ_001_2: Controls
+ht29_ps_counts <- read.delim(file.path(base_path.ht29,"combined_counts.txt")) %>%
+  mutate(num_transcripts_not_hit = yusa.annot$num_transcripts_not_hit[match(sgRNA,yusa.annot$CODE)],
+         percent_transcripts_not_hit = yusa.annot$percent_transcripts_not_hit[match(sgRNA,yusa.annot$CODE)],
+         total_num_transcripts = yusa.annot$total_num_transcripts[match(sgRNA,yusa.annot$CODE)])
+
+cat("Total num transcripts:")
+cat("Controls:")
+cor.test(~FGC_AZ_001_1+total_num_transcripts,ht29_ps_counts,method="spearman")
+cor.test(~FGC_AZ_001_2+total_num_transcripts,ht29_ps_counts,method="spearman")
+cat("Plasmids:")
+cor.test(~FGC_AZ_001_3+total_num_transcripts,ht29_ps_counts,method="spearman")
+cor.test(~FGC_AZ_001_4+total_num_transcripts,ht29_ps_counts,method="spearman")
+
+```
+
+## Post-selection Bayes Factors
+
+```{r}
+# Bayes Factors for HT29 lethality screen.
+ht29_BF <- read.delim(file.path(base_path.ht29,"crisprn","plasmid_test","bagel",
+                                "Control_vs_Plasmid.bf"), header=T, stringsAsFactors = F) %>%
+  mutate(total_tx_not_hit.per_gene = yusa.annot$total_tx_not_hit.per_gene,
+         median_tx_not_hit.per_gene = median(num_transcripts_not_hit))
+
+```
+
 
 # GC content vs counts
 

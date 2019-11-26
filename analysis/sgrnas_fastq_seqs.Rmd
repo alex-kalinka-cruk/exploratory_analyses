@@ -24,14 +24,15 @@ suppressMessages(library(readr))
 suppressMessages(library(ggplot2))
 suppressMessages(library(dplyr))
 
+filter <- dplyr::filter
+select <- dplyr::select
+rename <- dplyr::rename
+
 base_path.data <- file.path("~","data","az_cruk")
 base_path.ht29 <- file.path(base_path.data,"ht29")
 
 # 'cleanr.tsv' file from Miike.
-yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv")))) %>%
-  rowwise() %>%
-  mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/20) %>%
-  ungroup()
+yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv"))))
 
 ```
 
@@ -58,7 +59,7 @@ count_sgrnas <- function(file, rename){
     counts <- read.table(file, header = T, stringsAsFactors = F)
   }
   counts %<>%
-    filter(gene != "Control" & gene != ".") %>%
+    filter(gene != "Control" & gene != "." & !is.na(gene)) %>%
     group_by(gene) %>%
     summarise(sgRNA_per_gene_count = n()) %>%
     ungroup() %>%
@@ -136,9 +137,7 @@ plot_sgrna_hist(counts_plasmid.2, "HT29; Plasmid Replicate 2")
 ### Control: post-selection
 
 ```{r}
-counts_ps <- count_sgrnas(file.path(base_path.ht29,
-                                                "crisprn","plasmid_test","counts","combined_counts.txt"), 
-                                 rename=T)
+counts_ps <- count_sgrnas(file.path(base_path.ht29,"combined_counts.txt"), rename=T)
 
 plot_sgrna_hist(counts_ps, "HT29; Post-selection")
 
@@ -154,7 +153,7 @@ yusa.v3.counts <- yusa.v3 %>%
   ungroup() %>%
   arrange(GENES) %>%
   rename(gene = GENES) %>%
-  filter(gene != "Control" & gene != ".")
+  filter(gene != "Control" & gene != "." & !is.na(gene))
 
 plot_sgrna_hist(yusa.v3.counts, "Yusa v3 Original Library")
 
@@ -163,22 +162,23 @@ plot_sgrna_hist(yusa.v3.counts, "Yusa v3 Original Library")
 ## Summary
 
 ```{r}
-kable(summarise.sgrna_counts(yusa.v3,"Yusa_v3"))
+kable(summarise.sgrna_counts(yusa.v3.counts,"Yusa_v3"))
 
 ```
 
 # Orphan sgRNAs
 
-Defined as sgRNAs that don't have gene IDs in the `GENES` column of the original Yusa v3 file and are missing in the Plasmid count files (entered as '.'), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).
+Defined as sgRNAs that don't have gene IDs in the `GENES` column of the original Yusa v3 file and are missing in the Plasmid count files (blank entries), but have valid gene IDs in their sgRNA IDs. Several genes in here have all 6 of their sgRNAs present (see sgRNA counts below).
 
 ```{r}
 orphans <- yusa.v3 %>%
-  filter(GENES == ".") %>%
+  filter(is.na(GENES)) %>%
   mutate(gene = gsub("^(\\S+?)_.*$","\\1",CODE))
+
+cat("Number of orphan sgRNAS:")
+nrow(orphans)
 
 kable(table(orphans$gene))
 
 ```
-
-
 
