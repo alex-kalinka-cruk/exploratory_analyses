@@ -39,6 +39,10 @@ yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.dat
 # Cached since expensive to re-create.
 yusa.annot <- readRDS(file.path(base_path.data,"yusa.v3.annotated.rds"))
 
+# Sanger pan-cancer core fitness (essential genes).
+pcf <- read.csv(file.path(base_path.data,"pan_cancer_core_fitness_genes--Sanger.csv"),
+                  stringsAsFactors = F)
+
 ```
 
 # Annotations
@@ -95,7 +99,7 @@ yusa.annot <- data.frame(annotate_regions(regions = yusa.granges, annotations = 
 # Get the total number of transcripts annotated to each gene.
 suppressMessages(library(biomaRt))
 
-ensembl = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
 
 ens_tx_ids <- getBM(filters = c("external_gene_name"),
                  values = yusa.annot$gene,
@@ -140,14 +144,15 @@ cor.test(~FGC_AZ_001_4+total_num_transcripts,ht29_ps_counts,method="spearman")
 
 ```
 
+
 ## Post-selection Bayes Factors
 
 ```{r}
 # Bayes Factors for HT29 lethality screen.
 ht29_BF <- read.delim(file.path(base_path.ht29,"crisprn","plasmid_test","bagel",
                                 "Control_vs_Plasmid.bf"), header=T, stringsAsFactors = F) %>%
-  mutate(total_tx_not_hit.per_gene = yusa.annot$total_tx_not_hit.per_gene,
-         median_tx_not_hit.per_gene = median(num_transcripts_not_hit))
+  inner_join(yusa.annot, by = c("GENE" = "gene")) %>%
+  inner_join(pcf, by = c("GENE" = "gene"))
 
 ```
 
