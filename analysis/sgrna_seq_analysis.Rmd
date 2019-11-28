@@ -42,6 +42,8 @@ yusa.annot <- readRDS(file.path(base_path.data,"yusa.v3.annotated.rds"))
 # Sanger pan-cancer core fitness (essential genes).
 pcf <- read.csv(file.path(base_path.data,"pan_cancer_core_fitness_genes--Sanger.csv"),
                   stringsAsFactors = F)
+# Ensembl tx IDs.
+ens_tx_ids <- readRDS(file=file.path(base_path.data,"ensembl_tx_ids.rds"))
 
 ```
 
@@ -90,7 +92,9 @@ yusa.annot <- data.frame(annotate_regions(regions = yusa.granges, annotations = 
             features = paste(sort(unique(feature)),collapse=";"),
             CDS = grepl("CDS",features),
             promoter = grepl("promoter",features),
-            transcript_ids_hit = paste(annot.type,collapse=";")) %>%
+            transcript_ids_hit = paste(unique(gsub("^(.*?)\\..*$","\\1",
+                                                   annot.tx_id[which(annot.symbol==gene)])),
+                                       collapse=";")) %>%
   ungroup()
 
 ```
@@ -98,13 +102,14 @@ yusa.annot <- data.frame(annotate_regions(regions = yusa.granges, annotations = 
 ```{r,eval=F}
 # Get the total number of transcripts annotated to each gene.
 suppressMessages(library(biomaRt))
-
 ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
 
 ens_tx_ids <- getBM(filters = c("external_gene_name"),
                  values = yusa.annot$gene,
-                 attributes = c("external_gene_name","ensembl_gene_id","ensembl_transcript_id"),
+                 attributes = c("external_gene_name","ensembl_gene_id","ensembl_transcript_id",
+                                "chromosome_name"),
                  mart = ensembl) %>%
+  filter(!grepl("CHR",chromosome_name)) %>%
   group_by(ensembl_gene_id) %>%
   summarise(gene = external_gene_name[1],
             transcript_ids = paste(ensembl_transcript_id,collapse=";"),
@@ -125,22 +130,53 @@ yusa.annot %<>%
 
 ```
 
-## Post-selection counts: HT29 lethality screen
+## Post-selection median logFC: HT29 lethality screen
 
 ```{r}
 # FGC_AZ_001_1 and FGC_AZ_001_2: Controls
-ht29_ps_counts <- read.delim(file.path(base_path.ht29,"combined_counts.txt")) %>%
-  mutate(num_transcripts_not_hit = yusa.annot$num_transcripts_not_hit[match(sgRNA,yusa.annot$CODE)],
-         percent_transcripts_not_hit = yusa.annot$percent_transcripts_not_hit[match(sgRNA,yusa.annot$CODE)],
-         total_num_transcripts = yusa.annot$total_num_transcripts[match(sgRNA,yusa.annot$CODE)])
+ht29_ps_lfc <- read.delim(file.path(base_path.ht29,"combined_counts.txt")) %>%
+  select(-gene) %>%
+  rowwise() %>%
+  mutate(Control_Plasmid.logFC.median = log2(median(c(FGC_AZ_001_1,FGC_AZ_001_2))) - 
+                                               log2(median(c(FGC_AZ_001_3,FGC_AZ_001_4)))) %>%
+  ungroup() %>%
+  inner_join(yusa.annot, by = c("sgRNA" = "CODE")) %>%
+  inner_join(pcf, by = "gene")
 
-cat("Total num transcripts:")
-cat("Controls:")
-cor.test(~FGC_AZ_001_1+total_num_transcripts,ht29_ps_counts,method="spearman")
-cor.test(~FGC_AZ_001_2+total_num_transcripts,ht29_ps_counts,method="spearman")
-cat("Plasmids:")
-cor.test(~FGC_AZ_001_3+total_num_transcripts,ht29_ps_counts,method="spearman")
-cor.test(~FGC_AZ_001_4+total_num_transcripts,ht29_ps_counts,method="spearman")
+# Correlation of tx_not_hit & median log FC within genes.
+ht29_lfs_miss_tx.cor <- ht29_ps_lfc %>%
+  group_by(gene,ensembl_gene_id) %>%
+  filter(sd(num_transcripts_not_hit)!=0 & Control_Plasmid.logFC.median!=Inf & Control_Plasmid.logFC.median!=(-Inf) & !is.na(Control_Plasmid.logFC.median) &
+           !is.na(num_transcripts_not_hit)) %>%
+  filter(n() >= 4) %>%
+  summarise(num_transcripts_not_hit.median = median(num_transcripts_not_hit,na.rm=T),
+            pct_transcripts_not_hit.median = median(percent_transcripts_not_hit,na.rm=T),
+            median.logFC.gene = median(Control_Plasmid.logFC.median, na.rm=T),
+            sd.logFC.gene = sd(Control_Plasmid.logFC.median, na.rm=T),
+            num_transcripts_not_hit.sd = sd(num_transcripts_not_hit,na.rm=T),
+            cor.lfc_num_tx_not_hit.spearman = cor(Control_Plasmid.logFC.median, num_transcripts_not_hit, method = "spearman"),
+            cor.lfc_num_tx_not_hit.spearman.pvalue = cor.test(Control_Plasmid.logFC.median, num_transcripts_not_hit, method = "spearman")$p.value,
+            random.cor.lfc_num_tx_not_hit.spearman = cor(
+              sample(Control_Plasmid.logFC.median,n(),replace=F),
+              sample(num_transcripts_not_hit,n(),replace=F), method = "spearman"),
+            PanCancer_Core_Fitness = PanCancer_Core_Fitness[1],
+            bagel_essential = bagel_essential[1], Ribosomal_Proteins = Ribosomal_Proteins[1]) %>%
+  ungroup()
+
+# Examples.
+plot_lfc <- function(data, tgene){
+  pl <- ggplot(data %>% filter(gene==tgene),
+         aes(percent_transcripts_not_hit,Control_Plasmid.logFC.median)) +
+    geom_point() +
+    ggtitle(tgene)
+  print(pl)
+}
+
+
+genes <- c("ANAPC11", "DDX46", "CENPK", "AURKA", "EIF2B4", "PHF8", "SNF8", "POLR1D", "MAK16", "BRD4")
+for(tgene in genes){
+  plot_lfc(ht29_ps_lfc,tgene)
+}
 
 ```
 
