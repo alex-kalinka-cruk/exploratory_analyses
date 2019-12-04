@@ -1,0 +1,77 @@
+---
+title: "Test: handling `bcl2fastq2` json object output"
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+options(warn=-1)
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(readr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+suppressMessages(library(purrr))
+suppressMessages(library(jsonlite))
+
+run_root <- "~/data/example_illumina_runs/basespace_run_138216078/bcl2fastq2--out"
+
+```
+
+# Example `bcl2fastq2` JSON input
+
+```{r}
+sanity_check_b2f_out <- function(data){
+  
+}
+
+extract_b2f_json <- function(path){
+  ret <- list()
+  all <- jsonlite::fromJSON(path) %>%
+    dplyr::as_tibble()
+  # Sanity check input.
+  # Flowcell info.
+  flowcell <- all[,1:3]
+  # RunInfo (read config).
+  run_info <- as.data.frame(all$ReadInfosForLanes$ReadInfos) %>%
+    dplyr::mutate(RunId = flowcell$RunId)
+  # Flowcell summary stats.
+  summ <- all$ConversionResults %>%
+    dplyr::select(-DemuxResults, -Undetermined) %>%
+    dplyr::mutate(RunId = flowcell$RunId)
+  # Sample summary stats.
+  samps <- all$ConversionResults$DemuxResults[[1]] %>%
+    dplyr::mutate(RunId = flowcell$RunId) %>%
+    tidyr::unnest(c(IndexMetrics, ReadMetrics), 
+           names_repair="universal") %>%
+    dplyr::mutate(MismatchCounts = MismatchCounts[,1],
+                  Index_OneBaseMismatch_percent = 100*(NumberReads-MismatchCounts)/NumberReads,
+                  Q30_bases_percent = 100*YieldQ30/Yield...8,
+                  Average_base_quality = QualityScoreSum/Yield...8,
+                  Trimmed_bases_percent = 100*TrimmedBases/Yield...8)
+  not_demux_count <- all$ConversionResults$Undetermined$NumberReads
+  summ %<>%
+    dplyr::mutate(ReadsPF_percent = 100*TotalClustersPF/TotalClustersRaw,
+           Non_Demultiplexed_Reads_percent = 100*not_demux_count/summ$TotalClustersPF,
+           Q30_bases_samples_percent = 100*sum(samps$YieldQ30)/sum(samps$Yield...8))
+  ret$flowcell <- flowcell
+  ret$run_info <- run_info
+  ret$summary <- summ
+  ret$samples <- samps
+  return(ret)
+}
+
+b2f <- extract_b2f_json(file.path(run_root,"Stats","Stats.json"))
+
+```
+
