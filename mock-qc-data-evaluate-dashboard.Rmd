@@ -1,0 +1,62 @@
+---
+title: "Mock QC data for evaluating QC dahsboard solution: AWS Quicksight vs powerBI"
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+set.seed(1)
+
+options(warn=-1)
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+suppressMessages(library(digest))
+
+```
+
+# Data
+
+```{r}
+num_exp <- 200
+flowcells <- paste("H",substr(sapply(1:num_exp, function(x) digest(rnorm(100), algo = "md5")),1,6),sep="")
+dates <- sort(sample(seq(as.Date("2020/02/18"), as.Date("2024/01/01"), by="day"), 200))
+
+data_experiment <- data.frame(flowcell = flowcells, 
+                              run_date = dates,
+                              reads_passing_filter_percent = 100*rbeta(num_exp,0.7,0.3),
+                              total_q30_bases_percent = 100*rbeta(num_exp,0.72,0.3),
+                              non_demultiplexed_reads_percent = 100*rbeta(num_exp,0.1,0.8),
+                              GICC = rbeta(num_exp,0.65,0.3),
+                              glass_delta_logfc = rnorm(num_exp,2,0.5),
+                              auroc = rbeta(num_exp,0.75,0.1),
+                              auprrc = rbeta(num_exp,0.65,0.3),
+                              nmmd = rnorm(num_exp,1.2,0.5))
+
+
+data_sample <- data.frame(flowcell = rep(flowcell, each=20)) %>%
+  group_by(flowcell) %>%
+  mutate(sample = paste("S",1:n(),sep=""),
+         dna_quant = rgamma(n(),0.65,0.3),
+         sample_representation_percent = 100*rbeta(0.1,1.9),
+         matching_grna_reads_percent = ) %>%
+  ungroup()
+
+```
+
+
+
+

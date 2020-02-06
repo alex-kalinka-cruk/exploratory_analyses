@@ -58,7 +58,8 @@ extract_b2f_json <- function(path){
                   Index_OneBaseMismatch_percent = 100*(NumberReads-MismatchCounts)/NumberReads,
                   Q30_bases_percent = 100*YieldQ30/Yield...8,
                   Average_base_quality = QualityScoreSum/Yield...8,
-                  Trimmed_bases_percent = 100*TrimmedBases/Yield...8)
+                  Trimmed_bases_percent = 100*TrimmedBases/Yield...8,
+                  Sample_Representation = 100*NumberReads/summ$TotalClustersPF)
   not_demux_count <- all$ConversionResults$Undetermined$NumberReads
   summ %<>%
     dplyr::mutate(ReadsPF_percent = 100*TotalClustersPF/TotalClustersRaw,
