@@ -40,8 +40,9 @@ yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.dat
 yusa.annot <- readRDS(file.path(base_path.data,"yusa.v3.annotated.rds"))
 
 # Sanger pan-cancer core fitness (essential genes).
-pcf <- read.csv(file.path(base_path.data,"pan_cancer_core_fitness_genes--Sanger.csv"),
+pcf <- read.csv("~/git-projects/essGenesCRISPR/data/pan_cancer_core_fitness_genes--Sanger.csv",
                   stringsAsFactors = F)
+load("~/git-projects/essGenesCRISPR/data/ess.genes.rda")
 # Ensembl tx IDs.
 ens_tx_ids <- readRDS(file=file.path(base_path.data,"ensembl_tx_ids.rds"))
 
@@ -134,7 +135,7 @@ yusa.annot %<>%
 
 ```{r}
 # FGC_AZ_001_1 and FGC_AZ_001_2: Controls
-ht29_ps_lfc <- read.delim(file.path(base_path.ht29,"combined_counts.txt")) %>%
+ht29_ps_lfc <- read.delim(file.path(base_path.ht29,"crisprn","plasmid_test","counts","combined_counts.txt")) %>%
   select(-gene) %>%
   rowwise() %>%
   mutate(Control_Plasmid.logFC.median = log2(median(c(FGC_AZ_001_1,FGC_AZ_001_2))) - 

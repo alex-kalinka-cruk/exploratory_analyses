@@ -1,0 +1,42 @@
+---
+title: 'Defining a single Plasmid replicate for a multiply-sequenced Plasmid batch'
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+```{r,echo=F}
+options(warn=-1)
+
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(readr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+
+select <- dplyr::select
+filter <- dplyr::filter
+
+pl_counts_batch_1 <- read.table("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/combined_counts.txt",
+                                stringsAsFactors = F, header = T) %>%
+  select(sgRNA, gene, FGC_AZ_001_3, FGC_AZ_001_4)
+
+```
+
+# Summarise plasmid counts
+
+```{r}
+
+
+```
+
+
