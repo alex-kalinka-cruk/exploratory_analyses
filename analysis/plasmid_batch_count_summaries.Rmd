@@ -1,5 +1,5 @@
 ---
-title: 'Defining a single Plasmid replicate for a multiply-sequenced Plasmid batch'
+title: 'Defining a single Plasmid sample for a Plasmid batch sequenced several times'
 author: "Alex Kalinka"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -13,30 +13,160 @@ output:
     toc_float: true
 ---
 
-```{r,echo=F}
+# Setup
+
+```{r}
 options(warn=-1)
+set.seed(1)
 
 suppressMessages(library(knitr))
 suppressMessages(library(tidyr))
 suppressMessages(library(magrittr))
 suppressMessages(library(readr))
 suppressMessages(library(ggplot2))
+suppressMessages(library(GGally))
 suppressMessages(library(dplyr))
+suppressMessages(library(moments))
 
 select <- dplyr::select
 filter <- dplyr::filter
+rename <- dplyr::rename
 
-pl_counts_batch_1 <- read.table("~/data/az_cruk/ht29/crisprn/plasmid_test/counts/combined_counts.txt",
+ht29_path <- "~/data/az_cruk/ht29/crisprn/plasmid_test/counts"
+
+pl_counts_batch_1 <- read.table(file.path(ht29_path,"combined_counts.txt"),
                                 stringsAsFactors = F, header = T) %>%
-  select(sgRNA, gene, FGC_AZ_001_3, FGC_AZ_001_4)
+  select(sgRNA, gene, FGC_AZ_001_3, FGC_AZ_001_4) %>%
+  left_join(read.table(file.path(ht29_path,"Plasmid_AZ_1.s_1.counts"),
+                       header = F, stringsAsFactors = F) %>%
+              select(-V2), by = c("sgRNA"="V1")) %>%
+  left_join(read.table(file.path(ht29_path,"Plasmid_AZ_2.s_1.counts"),
+                       header = F, stringsAsFactors = F) %>%
+              select(-V2), by = c("sgRNA"="V1")) %>%
+  rename(Plasmid_AZ_1 = V3.x, Plasmid_AZ_2 = V3.y)
 
 ```
 
 # Summarise plasmid counts
 
-```{r}
+**Approach**:
 
+* Relativise the plasmid samples so that they each sum to 1.
+* Multiply by the median total library depth.
+* Take the rounded median across each sgRNA.
+
+The summarised plasmid sample will be referred to as **Plasmid FGC batch 1**.
+
+```{r}
+lib_depth <- colSums(pl_counts_batch_1[,3:6])
+median_lib_depth <- median(lib_depth)
+
+pl_relat <- pl_counts_batch_1 %>%
+  mutate(FGC_AZ_001_3 = median_lib_depth*FGC_AZ_001_3/lib_depth[1],
+         FGC_AZ_001_4 = median_lib_depth*FGC_AZ_001_4/lib_depth[2],
+         Plasmid_AZ_1 = median_lib_depth*Plasmid_AZ_1/lib_depth[3],
+         Plasmid_AZ_2 = median_lib_depth*Plasmid_AZ_2/lib_depth[4])
+
+pl_summ <- pl_relat %>%
+  rowwise() %>%
+  mutate(Plasmid_FGC_batch_1 = as.integer(round(median(c(FGC_AZ_001_3,FGC_AZ_001_4,
+                                                 Plasmid_AZ_1,Plasmid_AZ_2))))) %>%
+  ungroup() %>%
+  arrange(sgRNA)
+
+# Save.
+write.table(pl_summ %>%
+              select(sgRNA, gene, Plasmid_FGC_batch_1),
+            "Plasmid_FGC_summarised.txt", quote=F, col.names = T, row.names = F, sep="\t")
+
+ggpairs(pl_summ[,3:6]) +
+  ggtitle("Plasmid AZ Batch 1 normalised: pairwise correlations")
 
 ```
 
+# Plasmid FGC sample stats
+
+## Distribution
+
+```{r}
+pl <- ggplot(pl_summ, aes(Plasmid_FGC_batch_1)) +
+  geom_histogram() +
+  ggtitle("Plasmid FGC: count distribution")
+
+suppressMessages(print(pl))
+
+pl <- pl_summ %>%
+  group_by(gene) %>%
+  summarise(Plasmid_FGC_batch_1.gene_mean = mean(Plasmid_FGC_batch_1),
+            Plasmid_FGC_batch_1.gene_var = var(Plasmid_FGC_batch_1)) %>%
+  ungroup %>%
+  ggplot(aes(Plasmid_FGC_batch_1.gene_mean, Plasmid_FGC_batch_1.gene_var)) + 
+  geom_hex() +
+  geom_smooth() +
+  xlim(0,2000) +
+  ggtitle("Plasmid FGC: Gene-level Mean vs Variance")
+
+suppressMessages(print(pl))
+
+```
+
+## Number of low-count guides
+
+```{r}
+cat("Number of zero-count gRNAS:\n",sum(pl_summ$Plasmid_FGC_batch_1==0))
+
+cat("Number of gRNAS < 30 counts:\n",sum(pl_summ$Plasmid_FGC_batch_1<30))
+
+```
+
+## Plasmid Library Width a la `gscreend` (Imkeller et al. 2020)
+
+Based on a simple metric proposed in Imkeller et al. (2020).
+
+```{r}
+libd <- quantile(pl_summ$Plasmid_FGC_batch_1, 0.9)/quantile(pl_summ$Plasmid_FGC_batch_1,0.1)
+names(libd) <- NULL
+
+cat("Library distribution width:\n", libd)
+
+```
+
+According to Figure 4H in Imkeller et al. (2020), we are at the better end of the library width spectrum for achieving high recall (sensitivity) with relatively low splitting coverage:
+
+![Precision-vs-splitting-coverage-Fig4H](/Users/alexkalinka/git-projects/exploratory_analyses/data/gscreend-figure4H.png)
+
+## Library skewness using Sarle's metric
+
+Sarle's bimodality metric ranges from 0-1 with higher values indicating more bimodal or skewed distributions - below I compare it to 100 random Gaussian distributions of the same size.
+
+```{r}
+calc_sarles_bimod <- function(data){
+  return((skewness(data)^2+1)/kurtosis(data))
+}
+
+random_sb <- function(num = 100){
+  return(sapply(1:num, function(x) calc_sarles_bimod(rnorm(nrow(pl_summ)))))
+}
+
+sb <- (skewness(pl_summ$Plasmid_FGC_batch_1)^2+1)/kurtosis(pl_summ$Plasmid_FGC_batch_1)
+
+cat("Sarle's bimodality metric:\n",sb)
+
+rsb <- random_sb()
+
+pl <- data.frame(Sarles_metric = rsb) %>%
+  ggplot(aes(Sarles_metric)) +
+  geom_histogram() +
+  geom_vline(xintercept = sb, color = "red") +
+  geom_hline(yintercept = 0) +
+  ggtitle("Plasmid FGC Sarle's bimodality (red) vs random Gaussians")
+
+suppressMessages(print(pl))
+
+```
+
+
+# References
+
+Imkeller, K. et al. 2020. gscreend: modelling asymmetric count ratios in CRISPR screens to decrease experiment size and improve phenotype detection. *Genome Biol* **21**, 53.
 
