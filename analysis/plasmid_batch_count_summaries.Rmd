@@ -20,6 +20,8 @@ options(warn=-1)
 set.seed(1)
 
 suppressMessages(library(knitr))
+suppressMessages(library(grid))
+suppressMessages(library(gridExtra))
 suppressMessages(library(tidyr))
 suppressMessages(library(magrittr))
 suppressMessages(library(readr))
@@ -34,6 +36,7 @@ rename <- dplyr::rename
 
 ht29_path <- "~/data/az_cruk/ht29/crisprn/plasmid_test/counts"
 
+# Plasmid counts for batch 1.
 pl_counts_batch_1 <- read.table(file.path(ht29_path,"combined_counts.txt"),
                                 stringsAsFactors = F, header = T) %>%
   select(sgRNA, gene, FGC_AZ_001_3, FGC_AZ_001_4) %>%
@@ -44,6 +47,12 @@ pl_counts_batch_1 <- read.table(file.path(ht29_path,"combined_counts.txt"),
                        header = F, stringsAsFactors = F) %>%
               select(-V2), by = c("sgRNA"="V1")) %>%
   rename(Plasmid_AZ_1 = V3.x, Plasmid_AZ_2 = V3.y)
+
+# Yusa with gRNA sequences.
+yusa.v3 <- read.table("~/data/az_cruk/cleanr.tsv", stringsAsFactors = F, header=T) %>%
+  rowwise() %>%
+  mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/19) %>%
+  ungroup()
 
 ```
 
@@ -74,17 +83,24 @@ pl_summ <- pl_relat %>%
   ungroup() %>%
   arrange(sgRNA)
 
+
+cat("Sanity checks:\nPearson correlation between plasmid samples:\n(expect 'Plasmid_FGC_batch_1' to have high correlations with original plasmid samples)\n")
+kable(cor(pl_summ[,3:7]))
+
+cat("Number of NA counts in 'Plasmid_FGC_batch_1':\n",sum(is.na(pl_summ$Plasmid_FGC_batch_1)))
+
+
 # Save.
 write.table(pl_summ %>%
               select(sgRNA, gene, Plasmid_FGC_batch_1),
-            "Plasmid_FGC_summarised.txt", quote=F, col.names = T, row.names = F, sep="\t")
+            "../data/Plasmid_FGC_batch_1--summarised.txt", quote=F, col.names = T, row.names = F, sep="\t")
 
 ggpairs(pl_summ[,3:6]) +
-  ggtitle("Plasmid AZ Batch 1 normalised: pairwise correlations")
+  ggtitle("Plasmid AZ Batch 1 original samples (normalised): pairwise correlations")
 
 ```
 
-# Plasmid FGC sample stats
+# Plasmid FGC batch 1 analysis
 
 ## Distribution
 
@@ -119,9 +135,9 @@ cat("Number of gRNAS < 30 counts:\n",sum(pl_summ$Plasmid_FGC_batch_1<30))
 
 ```
 
-## Plasmid Library Width a la `gscreend` (Imkeller et al. 2020)
+## Plasmid Library Width
 
-Based on a simple metric proposed in Imkeller et al. (2020).
+Based on a simple metric proposed in `gscreend` paper (Imkeller et al. 2020).
 
 ```{r}
 libd <- quantile(pl_summ$Plasmid_FGC_batch_1, 0.9)/quantile(pl_summ$Plasmid_FGC_batch_1,0.1)
@@ -131,9 +147,37 @@ cat("Library distribution width:\n", libd)
 
 ```
 
-According to Figure 4H in Imkeller et al. (2020), we are at the better end of the library width spectrum for achieving high recall (sensitivity) with relatively low splitting coverage:
+According to **Figure 4H** in Imkeller et al. (2020), we are at the better end of the library width spectrum for achieving high recall (sensitivity) with relatively low splitting coverage:
 
-![Precision-vs-splitting-coverage-Fig4H](/Users/alexkalinka/git-projects/exploratory_analyses/data/gscreend-figure4H.png)
+![**Figure 4H**: Recall - Splitting coverage vs Library depth](/Users/alexkalinka/git-projects/exploratory_analyses/data/gscreend-figure4H.png)
+
+## GC content vs counts
+
+Estimating the impact of GC content on sgRNA counts. The plot below shows that there is a positive non-linear GC bias, and that below a GC content of ~30%-35% there is a steep drop in gRNA counts. We could consider one or both of the following:
+
+* Applying a GC content correction
+* Excluding gRNAs with a GC content below ~35%.
+
+```{r}
+pl_gc <- pl_summ %>%
+  left_join(yusa.v3, by = c("sgRNA" = "CODE")) %>%
+  group_by(GC_percent) %>%
+  mutate(median_count = as.integer(round(median(Plasmid_FGC_batch_1, na.rm=T)))) %>%
+  ungroup()
+
+pl <- ggplot(pl_gc, aes(GC_percent, Plasmid_FGC_batch_1)) +
+  geom_count(aes(color = ..n..)) +
+  stat_summary(aes(y = Plasmid_FGC_batch_1), fun.y = median, color = "red", geom="point") +
+  geom_smooth() +
+  ylim(0,2000) +
+  ylab("sgRNA count") +
+  ggtitle("Plasmid FGC batch 1: gRNA counts vs GC content", subtitle = "Median count") +
+  theme(plot.subtitle = element_text(color="red", size=10))
+ 
+suppressMessages(print(pl))
+
+```
+
 
 ## Library skewness using Sarle's metric
 
