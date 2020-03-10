@@ -93,7 +93,13 @@ cat("Number of NA counts in 'Plasmid_FGC_batch_1':\n",sum(is.na(pl_summ$Plasmid_
 # Save.
 write.table(pl_summ %>%
               select(sgRNA, gene, Plasmid_FGC_batch_1),
-            "../data/Plasmid_FGC_batch_1--summarised.txt", quote=F, col.names = T, row.names = F, sep="\t")
+            "../data/Yusa_v3_KO_Plasmid_FGC_batch_1--summarised.txt", 
+            quote=F, col.names = T, row.names = F, sep="\t")
+
+write.table(pl_summ %>%
+              select(sgRNA, gene, Plasmid_FGC_batch_1),
+            "../data/Yusa_v3_KO_Plasmid_FGC_batch_1--summarised--no-header.txt", 
+            quote=F, col.names = F, row.names = F, sep="\t")
 
 ggpairs(pl_summ[,3:6]) +
   ggtitle("Plasmid AZ Batch 1 original samples (normalised): pairwise correlations")
