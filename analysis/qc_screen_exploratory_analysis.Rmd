@@ -1,0 +1,98 @@
+---
+title: 'QC screen (HT-29 essentiality) analysis'
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+# Setup
+
+```{r,echo=F}
+options(warn=-1)
+
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(readr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+
+select <- dplyr::select
+filter <- dplyr::filter
+
+data.bl <- read.table("~/data/az_cruk/QC_screen/baseline_vs_plasmid_3_replicates/counts/combined_counts.txt", 
+                   header=T, stringsAsFactors = F)
+data.d7 <- read.table("~/data/az_cruk/QC_screen/d7_vs_plasmid_3_replicates/counts/combined_counts.txt", 
+                   header=T, stringsAsFactors = F)
+data.d14 <- read.table("~/data/az_cruk/QC_screen/d14_vs_plasmid_3_replicates/counts/combined_counts.txt", 
+                   header=T, stringsAsFactors = F)
+
+load("~/git-projects/essGenesCRISPR/data/ess.genes.rda")
+
+```
+
+# Log FC
+
+```{r}
+norm_logfc <- function(data, samples){
+  csums <- colSums(data[,3:6])
+  # Use median of controls.
+  mdn.ctrl <- median(csums[grepl("FGC0008",names(csums))])
+  data.lfc <- data %>%
+    rowwise() %>%
+    mutate(!!sym(samples[1]) := mdn.ctrl * !!sym(samples[1])/csums[names(csums)==samples[1]],
+         !!sym(samples[2]) := mdn.ctrl * !!sym(samples[2])/csums[names(csums)==samples[2]],
+         !!sym(samples[3]) := mdn.ctrl * !!sym(samples[3])/csums[names(csums)==samples[3]],
+         Yusa_v3_KO_Plasmid_FGC_batch_1 = mdn.ctrl*Yusa_v3_KO_Plasmid_FGC_batch_1/csums[names(csums)=="Yusa_v3_KO_Plasmid_FGC_batch_1"],
+         Control_Plasmid.logFC.median = log2(median(c(!!sym(samples[1]),!!sym(samples[2]),
+                                                      !!sym(samples[3])))) - 
+                                               log2(Yusa_v3_KO_Plasmid_FGC_batch_1),
+         gene_group = case_when(gene %in% ess.genes$pan_cancer_Sanger ~ "pan_cancer_Sanger",
+                                gene %in% ess.genes$bagel_nonessential ~ "non_essential_Bagel",
+                                gene %in% ess.genes$ribosomal_proteins ~ "ribosomal_proteins",
+                                TRUE ~ "Other")) %>%
+    ungroup()
+  return(data.lfc)
+}
+
+# Plotting.
+plot_lfc <- function(data, title){
+  pl <- data %>%
+    filter(!gene_group%in%c("Other","ribosomal_proteins")) %>%
+    ggplot(aes(Control_Plasmid.logFC.median, fill=gene_group)) +
+    geom_density(alpha=0.25) +
+    geom_vline(xintercept = 0, linetype="dashed") +
+    ggtitle(paste("QC screen: log2fc for",title,"vs plasmid"))
+  print(pl)
+}
+
+
+lfc.bl <- norm_logfc(data.bl, c("FGC0008_01_01_01","FGC0008_01_01_02","FGC0008_01_01_03"))
+lfc.d7 <- norm_logfc(data.d7, c("FGC0008_01_01_04","FGC0008_01_01_05","FGC0008_01_01_06"))
+lfc.d14 <- norm_logfc(data.d14, c("FGC0008_01_01_07","FGC0008_01_01_08","FGC0008_01_01_09"))
+
+plot_lfc(lfc.bl, "baseline")
+plot_lfc(lfc.d7, "Day 7")
+plot_lfc(lfc.d14, "Day 14")
+
+rbind(lfc.bl %>% mutate(time = "baseline") %>% select(Control_Plasmid.logFC.median, gene_group, time),
+      lfc.d7 %>% mutate(time = "Day 7") %>% select(Control_Plasmid.logFC.median, gene_group, time),
+      lfc.d14 %>% mutate(time = "Day 14") %>% select(Control_Plasmid.logFC.median, gene_group, time)) %>%
+  filter(gene_group == "pan_cancer_Sanger") %>%
+  mutate(time = factor(time, levels = c("baseline","Day 7","Day 14"))) %>%
+  ggplot(aes(time, Control_Plasmid.logFC.median, color = time)) +
+  geom_point() +
+  geom_boxplot(notch=T) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  ggtitle("QC screen: pan-cancer Sanger log2fc")
+
+```
+
