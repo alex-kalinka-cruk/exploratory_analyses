@@ -34,9 +34,10 @@ select <- dplyr::select
 filter <- dplyr::filter
 rename <- dplyr::rename
 
-ht29_path <- "~/data/az_cruk/ht29/crisprn/plasmid_test/counts"
+base_path <- "~/data/az_cruk"
+ht29_path <- file.path(base_path,"ht29/crisprn/plasmid_test/counts")
 
-# Plasmid counts for batch 1.
+# Plasmid counts for Yusa v3 AZ batch 1.
 pl_counts_batch_1 <- read.table(file.path(ht29_path,"combined_counts.txt"),
                                 stringsAsFactors = F, header = T) %>%
   select(sgRNA, gene, FGC_AZ_001_3, FGC_AZ_001_4) %>%
@@ -47,6 +48,16 @@ pl_counts_batch_1 <- read.table(file.path(ht29_path,"combined_counts.txt"),
                        header = F, stringsAsFactors = F) %>%
               select(-V2), by = c("sgRNA"="V1")) %>%
   rename(Plasmid_AZ_1 = V3.x, Plasmid_AZ_2 = V3.y)
+
+# Other library plasmid counts for Library Width comparisons.
+yusa_v1_pl_counts <- read.csv(file.path(base_path,"plasmid_counts/Yusa_v1_human_plasmid_counts.csv"),
+                              stringsAsFactors = F)
+brunello_pl_counts <- read.csv(file.path(base_path,"plasmid_counts/Brunello_human_plasmid_counts.csv"),
+                              stringsAsFactors = F)
+whitehead_conv_pl_counts <- read.csv(file.path(base_path,"plasmid_counts/Whitehead_conv_human_plasmid_counts.csv"),
+                              stringsAsFactors = F)
+whitehead_imprv_pl_counts <- read.csv(file.path(base_path,"plasmid_counts/Whitehead_imprv_human_plasmid_counts.csv"),
+                              stringsAsFactors = F)
 
 # Yusa with gRNA sequences.
 yusa.v3 <- read.table("~/data/az_cruk/cleanr.tsv", stringsAsFactors = F, header=T) %>%
@@ -146,10 +157,25 @@ cat("Number of gRNAS < 30 counts:\n",sum(pl_summ$Plasmid_FGC_batch_1<30))
 Based on a simple metric proposed in `gscreend` paper (Imkeller et al. 2020).
 
 ```{r}
-libd <- quantile(pl_summ$Plasmid_FGC_batch_1, 0.9)/quantile(pl_summ$Plasmid_FGC_batch_1,0.1)
-names(libd) <- NULL
+get_library_distr_width <- function(data){
+  lwd <- quantile(data, 0.9)/quantile(data, 0.1)
+  names(lwd) <- NULL
+  return(lwd)
+}
 
-cat("Library distribution width:\n", libd)
+cat("Library distribution width comparisons:\n")
+
+kable(rbind(data.frame(Library = "Yusa v3",Batch = "Plasmid FGC Batch 1 summarised",
+                       Library_Width = get_library_distr_width(pl_summ$Plasmid_FGC_batch_1)),
+                  data.frame(Library = "Yusa v1",Batch= "Ong et al. 2017",
+                             Library_Width = get_library_distr_width(yusa_v1_pl_counts$Plasmid)),
+                  data.frame(Library = "Brunello",Batch="Ong et al. 2017",
+                             Library_Width = get_library_distr_width(brunello_pl_counts$Plasmid)),
+                  data.frame(Library = "Whitehead conv",Batch="Ong et al. 2017",
+                             Library_Width = get_library_distr_width(whitehead_conv_pl_counts$Plasmid)),
+                  data.frame(Library = "Whitehead imprv",Batch="Ong et al. 2017",
+                             Library_Width = get_library_distr_width(whitehead_imprv_pl_counts$Plasmid)))
+)
 
 ```
 
@@ -219,4 +245,6 @@ suppressMessages(print(pl))
 # References
 
 Imkeller, K. et al. 2020. gscreend: modelling asymmetric count ratios in CRISPR screens to decrease experiment size and improve phenotype detection. *Genome Biol* **21**, 53.
+
+Ong, S. et al. 2017. Optimised metrics for CRISPR-KO screens with second-generation gRNA libraries. *Scientific Reports* **7**, 7384.
 
