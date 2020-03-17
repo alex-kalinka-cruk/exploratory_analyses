@@ -65,6 +65,9 @@ yusa.v3 <- read.table("~/data/az_cruk/cleanr.tsv", stringsAsFactors = F, header=
   mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/19) %>%
   ungroup()
 
+# QC screen logfc.
+lfc.bl <- read.table("../data/qc_screen.cleanr.logfc.baseline.tsv", header=T, stringsAsFactors = F)
+
 ```
 
 # Summarise plasmid counts
@@ -210,6 +213,27 @@ suppressMessages(print(pl))
 
 ```
 
+## GC content vs logFC (HT-29 QC screen 1)
+
+```{r}
+pl_gc %<>%
+  mutate(Control_Plasmid.baseline.logFC = lfc.bl$Control_Plasmid.logFC.median[match(sgRNA,lfc.bl$sgRNA)],
+         Control_Plasmid.day7.logFC = lfc.d7$Control_Plasmid.logFC.median[match(sgRNA,lfc.d7$sgRNA)],
+         Control_Plasmid.day14.logFC = lfc.d14$Control_Plasmid.logFC.median[match(sgRNA,lfc.d14$sgRNA)])
+
+pl <- ggplot(pl_gc %>%
+               dplyr::filter(between(GC_percent,20,75)),
+             aes(GC_percent, Control_Plasmid.baseline.logFC, group=GC_percent)) + 
+  geom_point() + 
+  geom_boxplot(notch=T) +
+  geom_smooth() +
+  ylim(-3,1.5) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  ggtitle("HT-29 QC screen: logFC BL vs GC content")
+ 
+suppressMessages(print(pl))
+
+```
 
 ## Library skewness using Sarle's metric
 
