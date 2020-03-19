@@ -62,11 +62,17 @@ whitehead_imprv_pl_counts <- read.csv(file.path(base_path,"plasmid_counts/Whiteh
 # Yusa with gRNA sequences.
 yusa.v3 <- read.table("~/data/az_cruk/cleanr.tsv", stringsAsFactors = F, header=T) %>%
   rowwise() %>%
-  mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/19) %>%
+  mutate(GC_percent = 100*(sum(unlist(strsplit(seq,"")) == "G") + sum(unlist(strsplit(seq,"")) == "C"))/19,
+         pam_upstream4 = substr(seq,16,19),
+         proximal_4bases_pam = case_when(grepl("TT",pam_upstream4) ~ "TT",
+                                         grepl("GCC",pam_upstream4) ~ "GCC",
+                                         TRUE ~ "Other")) %>%
   ungroup()
 
 # QC screen logfc.
 lfc.bl <- read.table("../data/qc_screen.cleanr.logfc.baseline.tsv", header=T, stringsAsFactors = F)
+lfc.d7 <- read.table("../data/qc_screen.cleanr.logfc.day7.tsv", header=T, stringsAsFactors = F)
+lfc.d14 <- read.table("../data/qc_screen.cleanr.logfc.day14.tsv", header=T, stringsAsFactors = F)
 
 ```
 
@@ -217,19 +223,43 @@ suppressMessages(print(pl))
 
 ```{r}
 pl_gc %<>%
-  mutate(Control_Plasmid.baseline.logFC = lfc.bl$Control_Plasmid.logFC.median[match(sgRNA,lfc.bl$sgRNA)],
-         Control_Plasmid.day7.logFC = lfc.d7$Control_Plasmid.logFC.median[match(sgRNA,lfc.d7$sgRNA)],
-         Control_Plasmid.day14.logFC = lfc.d14$Control_Plasmid.logFC.median[match(sgRNA,lfc.d14$sgRNA)])
+  mutate(Control_Plasmid.baseline.logFC = lfc.bl$correctedFC[match(sgRNA,lfc.bl$SEQID)],
+         Control_Plasmid.day7.logFC = lfc.d7$correctedFC[match(sgRNA,lfc.d7$SEQID)],
+         Control_Plasmid.day14.logFC = lfc.d14$correctedFC[match(sgRNA,lfc.d14$SEQID)])
 
 pl <- ggplot(pl_gc %>%
                dplyr::filter(between(GC_percent,20,75)),
-             aes(GC_percent, Control_Plasmid.baseline.logFC, group=GC_percent)) + 
+             aes(GC_percent, Control_Plasmid.baseline.logFC)) + 
+  geom_point(position = position_dodge(width=0.75)) + 
+  geom_boxplot(notch=T, aes(color=proximal_4bases_pam)) +
+  scale_x_continuous(breaks = unique(pl_gc$GC_percent)) +
+  ylim(-3,1.5) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  ggtitle("HT-29 QC screen: logFC Baseline vs GC content")
+ 
+suppressMessages(print(pl))
+
+pl <- ggplot(pl_gc %>%
+               dplyr::filter(between(GC_percent,20,75)),
+             aes(GC_percent, Control_Plasmid.day7.logFC, group=GC_percent)) + 
   geom_point() + 
   geom_boxplot(notch=T) +
   geom_smooth() +
   ylim(-3,1.5) +
   geom_hline(yintercept = 0, linetype="dashed") +
-  ggtitle("HT-29 QC screen: logFC BL vs GC content")
+  ggtitle("HT-29 QC screen: logFC Day 7 vs GC content")
+ 
+suppressMessages(print(pl))
+
+pl <- ggplot(pl_gc %>%
+               dplyr::filter(between(GC_percent,20,75)),
+             aes(GC_percent, Control_Plasmid.day14.logFC, group=GC_percent)) + 
+  geom_point() + 
+  geom_boxplot(notch=T) +
+  geom_smooth() +
+  ylim(-3,1.5) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  ggtitle("HT-29 QC screen: logFC Day 14 vs GC content")
  
 suppressMessages(print(pl))
 
