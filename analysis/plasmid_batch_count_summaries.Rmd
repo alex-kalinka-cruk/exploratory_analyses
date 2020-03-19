@@ -228,11 +228,11 @@ pl_gc %<>%
          Control_Plasmid.day14.logFC = lfc.d14$correctedFC[match(sgRNA,lfc.d14$SEQID)])
 
 pl <- ggplot(pl_gc %>%
-               dplyr::filter(between(GC_percent,20,75)),
-             aes(GC_percent, Control_Plasmid.baseline.logFC)) + 
+               dplyr::filter(between(GC_percent,20,75)) %>%
+               mutate(GC_percent = factor(round(GC_percent))),
+             aes(GC_percent, Control_Plasmid.baseline.logFC, color=proximal_4bases_pam)) + 
   geom_point(position = position_dodge(width=0.75)) + 
-  geom_boxplot(notch=T, aes(color=proximal_4bases_pam)) +
-  scale_x_continuous(breaks = unique(pl_gc$GC_percent)) +
+  geom_boxplot(notch=T) +
   ylim(-3,1.5) +
   geom_hline(yintercept = 0, linetype="dashed") +
   ggtitle("HT-29 QC screen: logFC Baseline vs GC content")
@@ -240,11 +240,11 @@ pl <- ggplot(pl_gc %>%
 suppressMessages(print(pl))
 
 pl <- ggplot(pl_gc %>%
-               dplyr::filter(between(GC_percent,20,75)),
-             aes(GC_percent, Control_Plasmid.day7.logFC, group=GC_percent)) + 
-  geom_point() + 
+               dplyr::filter(between(GC_percent,20,75)) %>%
+               mutate(GC_percent = factor(round(GC_percent))),
+             aes(GC_percent, Control_Plasmid.day7.logFC, color=proximal_4bases_pam)) + 
+  geom_point(position = position_dodge(width=0.75)) + 
   geom_boxplot(notch=T) +
-  geom_smooth() +
   ylim(-3,1.5) +
   geom_hline(yintercept = 0, linetype="dashed") +
   ggtitle("HT-29 QC screen: logFC Day 7 vs GC content")
@@ -252,11 +252,11 @@ pl <- ggplot(pl_gc %>%
 suppressMessages(print(pl))
 
 pl <- ggplot(pl_gc %>%
-               dplyr::filter(between(GC_percent,20,75)),
-             aes(GC_percent, Control_Plasmid.day14.logFC, group=GC_percent)) + 
-  geom_point() + 
+               dplyr::filter(between(GC_percent,20,75)) %>%
+               mutate(GC_percent = factor(round(GC_percent))),
+             aes(GC_percent, Control_Plasmid.day14.logFC, color=proximal_4bases_pam)) + 
+  geom_point(position = position_dodge(width=0.75)) + 
   geom_boxplot(notch=T) +
-  geom_smooth() +
   ylim(-3,1.5) +
   geom_hline(yintercept = 0, linetype="dashed") +
   ggtitle("HT-29 QC screen: logFC Day 14 vs GC content")
