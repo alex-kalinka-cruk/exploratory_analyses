@@ -1,0 +1,52 @@
+---
+title: 'sgRNA GC bias correction analyses'
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+# Setup
+
+```{r,echo=F}
+options(warn=-1)
+
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(readr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+suppressMessages(library(BSgenome.Hsapiens.UCSC.hg19))
+suppressMessages(library(motifRG))
+
+select <- dplyr::select
+filter <- dplyr::filter
+
+bthin <- read.table("../data/c903-bthin-rnorm.500.symmFC.txt", header=T, stringsAsFactors = F) %>%
+  rowwise() %>%
+  mutate(coord = unlist(strsplit(sgRNA,"_"))[4], 
+         chrom = paste("chr",gsub("^(\\S+?):.*$","\\1",coord),sep=""),
+         start = gsub("^\\S+?:(\\d+?)-.*$","\\1",coord),
+         end = gsub("^\\S+?:\\d+?-(\\d+?):.*$","\\1",coord),
+         strand = gsub("^\\S+?:\\d+?-\\d+?:(.).*$","\\1",coord)) %>%
+  ungroup()
+
+```
+
+# Extract GC content
+
+```{r}
+
+
+```
+
+
+
