@@ -1,0 +1,87 @@
+---
+title: 'Defining moderately negative fitness defect genes: Depmap'
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+# Setup
+
+```{r,echo=F}
+options(warn=-1)
+
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(readr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+suppressMessages(library(biomaRt))
+
+select <- dplyr::select
+filter <- dplyr::filter
+
+load("../data/ess.genes.rda")
+
+data_base_path <- "~/data/az_cruk"
+genes.mod_fitn <- readRDS(file="~/data/az_cruk/depmap/depmap_lfc_modfitn.rds")
+```
+
+```{r,eval=F}
+depmap_fc <- read.csv(file.path(data_base_path,"Achilles_gene_effect.csv"), stringsAsFactors = F)
+
+```
+
+# Cell line analysis
+
+```{r,eval=F}
+depmap.summ <- depmap_fc %>%
+  pivot_longer(-cell_line, names_to = "gene", values_to = "logFC") %>%
+  group_by(gene) %>%
+  summarise(num_cell_lines = length(unique(cell_line)),
+            percent_cell_lines_range = 100*sum(between(logFC,-1.2,-0.5), na.rm = T)/num_cell_lines,
+            logFC.median = median(logFC, na.rm=T),
+            CV = sd(logFC, na.rm=T)/abs(mean(logFC, na.rm=T)),
+            CV.robust = mad(logFC, na.rm = T)/abs(median(logFC, na.rm = T))) %>%
+  ungroup()
+
+genes.mod_fitn <- (depmap.summ %>% 
+                     filter(percent_cell_lines_range > 90))$gene
+
+```
+
+# Conservation: dN/dS
+
+```{r}
+mart.hs <- useMart("ensembl", "hsapiens_gene_ensembl")
+mouse.dnds <- getBM(attributes = c("external_gene_name","mmusculus_homolog_dn","mmusculus_homolog_ds"), 
+      filters = "hgnc_symbol", values = c(ess.genes$pan_cancer_Sanger,
+                                          ess.genes$bagel_essential,
+                                          ess.genes$bagel_nonessential,
+                                          genes.mod_fitn), mart = mart.hs) %>%
+  mutate(gene_group = case_when(external_gene_name %in% ess.genes$pan_cancer_Sanger ~ "pan_cancer_Sanger",
+                                external_gene_name %in% ess.genes$bagel_nonessential ~ "non_essential_Hart",
+                                external_gene_name %in% ess.genes$bagel_essential ~ "essential_Hart",
+                                external_gene_name %in% genes.mod_fitn ~ "moderately_negative"),
+         dn_ds.mouse = mmusculus_homolog_dn/mmusculus_homolog_ds,
+         gene_group = factor(gene_group, levels = c("pan_cancer_Sanger","essential_Hart",
+                                                    "moderately_negative","non_essential_Hart")))
+
+
+ggplot(mouse.dnds, aes(gene_group, dn_ds.mouse, color = gene_group)) +
+  geom_point() +
+  geom_boxplot(notch=T) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  ggtitle("dN/dS human-mouse: Essential gene groups")
+
+```
+
+

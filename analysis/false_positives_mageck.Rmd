@@ -1,0 +1,70 @@
+---
+title: "False Positives in Mageck"
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+set.seed(1)
+
+options(warn=-1)
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+
+
+# Mageck false positive hits.
+mfp <- read.table("~/data/az_cruk/ht29-francesco-iorio/01_Counts assembled/mfp-1.txt.gene_summary.txt", header=T, stringsAsFactors = F) %>%
+  rowwise() %>%
+  mutate(hit = (neg.p.value < 0.05 | pos.p.value < 0.05)) %>%
+  ungroup()
+
+# Normalized data.
+load("~/data/az_cruk/ht29-francesco-iorio/01_normalised_and_FCs/HT29_c903.tsv_normCounts.Rdata")
+
+expand_guides <- function(data){
+  ret <- t(matrix(unlist(c(data[,3:4]),1,10)))#, 1, 
+  ret <- t(apply(ret, 1, function(x) return(sort(x))))
+  return(as.data.frame(ret))
+}
+
+data <- normed %>%
+  select(-ERS717283.plasmid,-HT29_c903R5,-HT29_c903R6) %>%
+  rowwise() %>%
+  mutate(lfc.1 = log2((HT29_c903R1+5)/(HT29_c903R3+5)), 
+         lfc.2 = log2((HT29_c903R2+5)/(HT29_c903R4+5))) %>%
+  ungroup() %>%
+  group_by(gene) %>%
+  mutate(num_guides = n()) %>%
+  filter(num_guides == 5) %>%
+  select(-num_guides,-HT29_c903R1,-HT29_c903R2,-HT29_c903R3,-HT29_c903R4) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup() %>%
+  mutate(hit = mfp$hit[match(gene, mfp$id)])
+
+
+pp <- prcomp(scale(data[,2:11]))
+
+data %<>%
+  mutate(PC1 = pp$x[,1], PC2 = pp$x[,2])
+
+ggplot(data, aes(PC1, PC2)) +
+  geom_hex() +
+  geom_point(data = data %>% filter(hit), aes(color = "hit"))
+
+```
+
+

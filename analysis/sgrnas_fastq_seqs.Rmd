@@ -30,9 +30,10 @@ rename <- dplyr::rename
 
 base_path.data <- file.path("~","data","az_cruk")
 base_path.ht29 <- file.path(base_path.data,"ht29")
+git_repo <- "~/git-projects/az-cruk-crispr-pipeline-referencedata/libraries/yusa_v3_human.1/"
 
 # 'cleanr.tsv' file from Miike.
-yusa.v3 <- suppressMessages(suppressWarnings(read_table2(file.path(base_path.data,"cleanr.tsv"))))
+yusa.v3 <- read.delim(file.path(base_path.data,"cleanr.tsv"), header=T, stringsAsFactors = F)
 
 ```
 
@@ -136,7 +137,7 @@ plot_sgrna_hist(counts_plasmid.2, "HT29; Plasmid Replicate 2")
 
 ### Control: post-selection
 
-```{r}
+```{r,eval=F}
 counts_ps <- count_sgrnas(file.path(base_path.ht29,"combined_counts.txt"), rename=T)
 
 plot_sgrna_hist(counts_ps, "HT29; Post-selection")
@@ -172,13 +173,13 @@ Defined as sgRNAs that don't have gene IDs in the `GENES` column of the original
 
 ```{r}
 orphans <- yusa.v3 %>%
-  filter(is.na(GENES)) %>%
+  filter(GENES == "") %>%
   mutate(gene = gsub("^(\\S+?)_.*$","\\1",CODE))
 
 cat("Number of orphan sgRNAS:")
 nrow(orphans)
 
-kable(table(orphans$gene))
+sort(table(orphans$gene), decreasing = T)
 
 ```
 

@@ -28,11 +28,11 @@ suppressMessages(library(dplyr))
 select <- dplyr::select
 filter <- dplyr::filter
 
-data.bl <- read.table("~/data/az_cruk/QC_screen/baseline_vs_plasmid_3_replicates/counts/combined_counts.txt", 
+data.bl <- read.table("~/data/az_cruk/QC_screen-FGC_0008//baseline_vs_plasmid_3_replicates/counts/combined_counts.txt", 
                    header=T, stringsAsFactors = F)
-data.d7 <- read.table("~/data/az_cruk/QC_screen/d7_vs_plasmid_3_replicates/counts/combined_counts.txt", 
+data.d7 <- read.table("~/data/az_cruk/QC_screen-FGC_0008//d7_vs_plasmid_3_replicates/counts/combined_counts.txt", 
                    header=T, stringsAsFactors = F)
-data.d14 <- read.table("~/data/az_cruk/QC_screen/d14_vs_plasmid_3_replicates/counts/combined_counts.txt", 
+data.d14 <- read.table("~/data/az_cruk/QC_screen-FGC_0008//d14_vs_plasmid_3_replicates/counts/combined_counts.txt", 
                    header=T, stringsAsFactors = F)
 
 load("~/git-projects/essGenesCRISPR/data/ess.genes.rda")
@@ -43,9 +43,9 @@ load("~/git-projects/essGenesCRISPR/data/ess.genes.rda")
 
 ```{r}
 norm_logfc <- function(data, samples){
-  csums <- colSums(data[,3:6])
+  csums <- colSums(data[,3:ncol(data)])
   # Use median of controls.
-  mdn.ctrl <- median(csums[grepl("FGC0008",names(csums))])
+  mdn.ctrl <- median(csums[grepl("FGC000",names(csums))])
   data.lfc <- data %>%
     rowwise() %>%
     mutate(!!sym(samples[1]) := mdn.ctrl * !!sym(samples[1])/csums[names(csums)==samples[1]],
