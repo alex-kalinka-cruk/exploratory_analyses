@@ -36,7 +36,7 @@ mfp <- read.table("~/data/az_cruk/ht29-francesco-iorio/01_Counts assembled/mfp-1
 load("~/data/az_cruk/ht29-francesco-iorio/01_normalised_and_FCs/HT29_c903.tsv_normCounts.Rdata")
 
 expand_guides <- function(data){
-  ret <- t(matrix(unlist(c(data[,3:4]),1,10)))#, 1, 
+  ret <- t(matrix(unlist(c(data[,3:4]),1,10)))
   ret <- t(apply(ret, 1, function(x) return(sort(x))))
   return(as.data.frame(ret))
 }
@@ -67,4 +67,148 @@ ggplot(data, aes(PC1, PC2)) +
 
 ```
 
+```{r}
+data %<>%
+  rowwise() %>%
+  mutate(max_lfc = max(c(V2,V3,V4,V5,V6,V7,V8,V9,V10)),
+         min_lfc = min(c(V2,V3,V4,V5,V6,V7,V8,V9,V10)),
+         perc_pos_lfc = 100*length(which(c(V2,V3,V4,V5,V6,V7,V8,V9,V10)>0))/10) %>%
+  ungroup()
+
+
+pp2 <- prcomp(scale(data[,c("max_lfc","min_lfc","perc_pos_lfc")]))
+
+data %<>%
+  mutate(PC1.2 = pp2$x[,1], PC2.2 = pp2$x[,2])
+
+ggplot(data, aes(PC1.2, PC2.2)) +
+  geom_hex() +
+  geom_point(data = data %>% filter(hit), aes(color = "hit"))
+
+```
+
+```{r}
+# UAT bthin for true LFC.
+bb <- readRDS(file="/Users/alexkalinka/git-projects/fgc_crispr_pipeline_UAT/data/bthin_lfc_rnorm.rds")
+bb <- bb[abs(bb) > 1]
+vv <- read.table("/Users/alexkalinka/git-projects/fgc_crispr_pipeline_UAT/data/combined_counts/dataset/bthin_from_combinedcounts/c903-bthin-rnorm.500.symmFC.txt",header=T,stringsAsFactors = F) %>%
+  select(-YUSAplasmid,-YUSADMSOD0) %>%
+  mutate(mc1 = median(c(sum(control.1),sum(control.2),sum(treat.1),sum(treat.2))), 
+         control.1 = mc1 * control.1/sum(control.1),
+         control.2 = mc1 * control.2/sum(control.2),
+         treat.1 = mc1 * treat.1/sum(treat.1),
+         treat.2 = mc1 * treat.2/sum(treat.2)) %>%
+  rowwise() %>%
+  mutate(lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  ungroup() %>%
+  group_by(gene) %>%
+  mutate(num_guides = n()) %>%
+  filter(num_guides == 5) %>%
+  select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup() %>%
+  mutate(hit = gene %in% names(bb))
+
+rr1 <- as.data.frame(as.matrix(vv[,2:11]) %*% pp$rotation)
+
+vv %<>%
+  mutate(PC1 = rr1$PC1, PC2 = rr1$PC2)
+  
+# fgc_0005.
+# SW480.
+tt <- read.csv("~/data/az_cruk/cdc7/fgc_0005_depletion_hit_table.csv",stringsAsFactors = F)
+qq <- read.table("/Users/alexkalinka/data/az_cruk/cdc7/Comp-SW480/counts/combined_counts.txt",
+                 header=T, stringsAsFactors = F) %>%
+  select(-FGC0005_01_03_01,-FGC0005_01_03_02,-Yusa_v3_KO_Plasmid_FGC_batch_1) %>%
+  mutate(mc1 = median(c(sum(FGC0005_01_03_03),sum(FGC0005_01_03_04),sum(FGC0005_01_03_05),sum(FGC0005_01_03_06))), 
+         control.1 = mc1 * FGC0005_01_03_03/sum(FGC0005_01_03_03),
+         control.2 = mc1 * FGC0005_01_03_04/sum(FGC0005_01_03_04),
+         treat.1 = mc1 * FGC0005_01_03_05/sum(FGC0005_01_03_05),
+         treat.2 = mc1 * FGC0005_01_03_06/sum(FGC0005_01_03_06)) %>%
+  rowwise() %>%
+  mutate(lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  ungroup() %>%
+  group_by(gene) %>%
+  mutate(num_guides = n()) %>%
+  filter(num_guides == 6 & !grepl("-6$",sgRNA)) %>%
+  select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1,
+         -FGC0005_01_03_03,-FGC0005_01_03_04,-FGC0005_01_03_05,-FGC0005_01_03_06) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup() %>%
+  mutate(hit = gene %in% tt$Gene)
+
+rr2 <- as.data.frame(as.matrix(scale(qq[,2:11])) %*% pp$rotation)
+
+qq %<>%
+  mutate(PC1 = rr2$PC1, PC2 = rr2$PC2)
+
+
+# RKO.
+kk <- read.table("/Users/alexkalinka/data/az_cruk/cdc7/Comp-RKO/counts/combined_counts.txt",
+                 header=T, stringsAsFactors = F) %>%
+  select(-FGC0005_01_02_01,-FGC0005_01_02_02,-Yusa_v3_KO_Plasmid_FGC_batch_1) %>%
+  mutate(mc1 = median(c(sum(FGC0005_01_02_03),sum(FGC0005_01_02_04),sum(FGC0005_01_02_05),sum(FGC0005_01_02_06))), 
+         control.1 = mc1 * FGC0005_01_02_03/sum(FGC0005_01_02_03),
+         control.2 = mc1 * FGC0005_01_02_04/sum(FGC0005_01_02_04),
+         treat.1 = mc1 * FGC0005_01_02_05/sum(FGC0005_01_02_05),
+         treat.2 = mc1 * FGC0005_01_02_06/sum(FGC0005_01_02_06)) %>%
+  rowwise() %>%
+  mutate(lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  ungroup() %>%
+  group_by(gene) %>%
+  mutate(num_guides = n()) %>%
+  filter(num_guides == 6 & !grepl("-6$",sgRNA)) %>%
+  select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1,
+         -FGC0005_01_02_03,-FGC0005_01_02_04,-FGC0005_01_02_05,-FGC0005_01_02_06) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup() %>%
+  mutate(hit = gene %in% tt$Gene)
+
+rr3 <- as.data.frame(as.matrix(scale(kk[,2:11])) %*% pp$rotation)
+
+kk %<>%
+  mutate(PC1 = rr3$PC1, PC2 = rr3$PC2)
+
+
+# HCT116.
+cc <- read.table("/Users/alexkalinka/data/az_cruk/cdc7/Comp-HCT116/counts/combined_counts.txt",
+                 header=T, stringsAsFactors = F) %>%
+  select(-FGC0005_01_04_01,-FGC0005_01_04_02,-FGC0005_01_04_03,
+         -FGC0005_01_04_06,-FGC0005_01_04_09,-Yusa_v3_KO_Plasmid_FGC_batch_1) %>%
+  mutate(mc1 = median(c(sum(FGC0005_01_04_04),sum(FGC0005_01_04_05),
+                        sum(FGC0005_01_04_07),sum(FGC0005_01_04_08))), 
+         control.1 = mc1 * FGC0005_01_04_04/sum(FGC0005_01_04_04),
+         control.2 = mc1 * FGC0005_01_04_05/sum(FGC0005_01_04_05),
+         treat.1 = mc1 * FGC0005_01_04_07/sum(FGC0005_01_04_07),
+         treat.2 = mc1 * FGC0005_01_04_08/sum(FGC0005_01_04_08)) %>%
+  rowwise() %>%
+  mutate(lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  ungroup() %>%
+  group_by(gene) %>%
+  mutate(num_guides = n()) %>%
+  filter(num_guides == 6 & !grepl("-6$",sgRNA)) %>%
+  select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1,
+         -FGC0005_01_04_04,-FGC0005_01_04_05,-FGC0005_01_04_07,-FGC0005_01_04_08) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup() %>%
+  mutate(hit = gene %in% tt$Gene)
+
+rr3 <- as.data.frame(as.matrix(scale(cc[,2:11])) %*% pp$rotation)
+
+cc %<>%
+  mutate(PC1 = rr3$PC1, PC2 = rr3$PC2)
+
+ggplot(data, aes(PC1, PC2)) +geom_hex() +
+  geom_point(data = data %>% filter(hit), aes(color = "hit")) +
+  geom_point(data=vv%>%filter(hit),aes(PC1,PC2,color="true_lfc")) +
+  geom_point(data=qq%>%filter(hit),aes(PC1,PC2,color="sw480")) +
+  geom_point(data=kk%>%filter(hit),aes(PC1,PC2,color="rko")) +
+  geom_point(data=cc%>%filter(hit),aes(PC1,PC2,color="hct116"))
+  
+
+```
 
