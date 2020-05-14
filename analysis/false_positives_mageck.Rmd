@@ -243,7 +243,6 @@ uu %<>%
 
 ggplot(data, aes(PC1, PC2)) + 
   geom_hex() +
-  geom_hline(yintercept = 0.95, linetype="dashed") +
   geom_point(data = data %>% filter(hit), aes(color = "hit")) +
   geom_point(data=vv%>%filter(hit),aes(PC1,PC2,color="true_lfc")) +
   geom_point(data=ww%>%filter(hit),aes(PC1,PC2,color="sw480")) +
