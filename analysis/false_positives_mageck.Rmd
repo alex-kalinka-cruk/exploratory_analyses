@@ -253,3 +253,22 @@ ggplot(data, aes(PC1, PC2)) +
 
 ```
 
+```{r}
+extract_pc2_optim <- function(data,prob){
+  # top x% of abs(PC1) genes.
+  cutoff <- quantile(abs(data$PC1),prob)
+  genes <- data$gene[abs(data$PC1) >= cutoff]
+  data %<>%
+    arrange(PC2) %>%
+    mutate(pc2_group = cut(PC2,70)) %>%
+    group_by(pc2_group) %>%
+    summarise(percent_top = 100*sum(gene %in% genes)/length(genes),
+              PC2_median = median(PC2)) %>%
+    ungroup()
+  return(data)
+}
+
+nn <- extract_pc2_optim(vv,0.975)
+
+```
+
