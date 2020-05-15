@@ -264,7 +264,8 @@ extract_pc2_optim <- function(data,prob){
     group_by(pc2_group) %>%
     summarise(percent_top = 100*sum(gene %in% genes)/length(genes),
               PC2_median = median(PC2)) %>%
-    ungroup()
+    ungroup() %>%
+    mutate(percent_top.cumsum = cumsum(percent_top))
   return(data)
 }
 
