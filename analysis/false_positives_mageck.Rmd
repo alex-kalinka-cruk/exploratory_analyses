@@ -252,69 +252,386 @@ norm_high %<>%
   mutate(PC1 = rot.high$PC1, PC2 = rot.high$PC2, PC3 = rot.high$PC3, PC4 = rot.high$PC4)
 
 
-rbind(extract_pc2_optim(norm_low, prob = 0.99) %>%
+rbind(extract_pc2_optim(test.tn_1, prob = 0.99) %>%
+        mutate(SD_lfc = "no_lfc"),
+      extract_pc2_optim(norm_low, prob = 0.99) %>%
         mutate(SD_lfc = "low"),
       extract_pc2_optim(norm_high, prob = 0.99) %>%
         mutate(SD_lfc = "high")) %>%
   ggplot(aes(PC2_median, percent_top.cumsum, color = SD_lfc)) +
   geom_point() +
-  geom_smooth()
+  geom_smooth() +
+  xlim(-5,5)
 
 ```
 
 ### Varying number of guides with signal added
 
-
-
-
 ```{r}
-load("~/data/az_cruk/ht29-francesco-iorio/01_normalised_and_FCs/HT29_c903.tsv_normCounts.Rdata")
+# 1 guide with no signal.
+coef_mat.low.m1 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_low),
+                                                           c(rep(lfc_low[names(lfc_low)==gene[1]],n()-1),0),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
 
-data <- normed %>%
-  select(-ERS717283.plasmid,-HT29_c903R5,-HT29_c903R6) %>%
-  rowwise() %>%
-  mutate(lfc.1 = log2((HT29_c903R1+5)/(HT29_c903R3+5)), 
-         lfc.2 = log2((HT29_c903R2+5)/(HT29_c903R4+5))) %>%
-  ungroup() %>%
+norm_low.m1 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.low.m1)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
   group_by(gene) %>%
-  mutate(num_guides = n()) %>%
-  filter(num_guides == 5) %>%
-  select(-num_guides,-HT29_c903R1,-HT29_c903R2,-HT29_c903R3,-HT29_c903R4) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
   do(data.frame(expand_guides(.))) %>%
-  ungroup() %>%
-  mutate(hit = mfp$hit[match(gene, mfp$id)])
-
-
-pp <- prcomp(scale(data[,2:11]))
-
-data %<>%
-  mutate(PC1 = pp$x[,1], PC2 = pp$x[,2], PC3 = pp$x[,3], PC4 = pp$x[,4])
-
-ggplot(data, aes(PC1, PC2)) +
-  geom_hex() +
-  geom_point(data = data %>% filter(hit), aes(color = "hit"))
-
-```
-
-```{r}
-data %<>%
-  rowwise() %>%
-  mutate(max_lfc = max(c(V2,V3,V4,V5,V6,V7,V8,V9,V10)),
-         min_lfc = min(c(V2,V3,V4,V5,V6,V7,V8,V9,V10)),
-         perc_pos_lfc = 100*length(which(c(V2,V3,V4,V5,V6,V7,V8,V9,V10)>0))/10) %>%
   ungroup()
 
+rot.low.m1 <- as.data.frame(as.matrix(scale(norm_low.m1[,2:11])) %*% pca.train$rotation)
 
-pp2 <- prcomp(scale(data[,c("max_lfc","min_lfc","perc_pos_lfc")]))
+norm_low.m1 %<>%
+  mutate(PC1 = rot.low.m1$PC1, PC2 = rot.low.m1$PC2, PC3 = rot.low.m1$PC3, PC4 = rot.low.m1$PC4)
 
-data %<>%
-  mutate(PC1.2 = pp2$x[,1], PC2.2 = pp2$x[,2])
+# 2 guides with no signal.
+coef_mat.low.m2 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_low),
+                                                           c(rep(lfc_low[names(lfc_low)==gene[1]],n()-2),0,0),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
 
-ggplot(data, aes(PC1.2, PC2.2)) +
-  geom_hex() +
-  geom_point(data = data %>% filter(hit), aes(color = "hit"))
+norm_low.m2 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.low.m2)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.low.m2 <- as.data.frame(as.matrix(scale(norm_low.m2[,2:11])) %*% pca.train$rotation)
+
+norm_low.m2 %<>%
+  mutate(PC1 = rot.low.m2$PC1, PC2 = rot.low.m2$PC2, PC3 = rot.low.m2$PC3, PC4 = rot.low.m2$PC4)
+
+# 3 guides with no signal.
+coef_mat.low.m3 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_low),
+                                                           c(rep(lfc_low[names(lfc_low)==gene[1]],n()-3),0,0,0),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_low.m3 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.low.m3)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.low.m3 <- as.data.frame(as.matrix(scale(norm_low.m3[,2:11])) %*% pca.train$rotation)
+
+norm_low.m3 %<>%
+  mutate(PC1 = rot.low.m3$PC1, PC2 = rot.low.m3$PC2, PC3 = rot.low.m3$PC3, PC4 = rot.low.m3$PC4)
+
+
+# 4 guides with no signal.
+coef_mat.low.m4 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_low),
+                                                           c(lfc_low[names(lfc_low)==gene[1]],0,0,0,0),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_low.m4 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.low.m4)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.low.m4 <- as.data.frame(as.matrix(scale(norm_low.m4[,2:11])) %*% pca.train$rotation)
+
+norm_low.m4 %<>%
+  mutate(PC1 = rot.low.m4$PC1, PC2 = rot.low.m4$PC2, PC3 = rot.low.m4$PC3, PC4 = rot.low.m4$PC4)
+
+
+rbind(extract_pc2_optim(norm_low, prob = 0.99) %>%
+        mutate(nosig_count = "0"),
+      extract_pc2_optim(norm_low.m1, prob = 0.99) %>%
+        mutate(nosig_count = "1"),
+      extract_pc2_optim(norm_low.m2, prob = 0.99) %>%
+        mutate(nosig_count = "2"),
+      extract_pc2_optim(norm_low.m3, prob = 0.99) %>%
+        mutate(nosig_count = "3"),
+      extract_pc2_optim(norm_low.m4, prob = 0.99) %>%
+        mutate(nosig_count = "4")) %>%
+  ggplot(aes(PC2_median, percent_top.cumsum, color = nosig_count)) +
+  geom_point() +
+  geom_smooth()
 
 ```
+
+### Varying prevalence
+
+```{r}
+# 100 genes
+num_sel_genes <- 100
+lfc_signal <- rnorm(num_sel_genes,0,1)
+
+
+lfc_100 <- lfc_signal
+names(lfc_100) <- sample(base_norm_counts$gene[between(base_norm_counts$sd_logfc,0.325,0.375)], num_sel_genes)
+
+coef_mat.100 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_100),
+                                                           rep(lfc_100[names(lfc_100)==gene[1]],n()),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_100 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.100)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.100 <- as.data.frame(as.matrix(scale(norm_100[,2:11])) %*% pca.train$rotation)
+
+norm_100 %<>%
+  mutate(PC1 = rot.100$PC1, PC2 = rot.100$PC2, PC3 = rot.100$PC3, PC4 = rot.100$PC4)
+
+
+# 500 genes.
+num_sel_genes <- 500
+lfc_signal <- rnorm(num_sel_genes,0,1)
+
+
+lfc_500 <- lfc_signal
+names(lfc_500) <- sample(base_norm_counts$gene[between(base_norm_counts$sd_logfc,0.325,0.375)], num_sel_genes)
+
+coef_mat.500 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_500),
+                                                           rep(lfc_500[names(lfc_500)==gene[1]],n()),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_500 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.500)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.500 <- as.data.frame(as.matrix(scale(norm_500[,2:11])) %*% pca.train$rotation)
+
+norm_500 %<>%
+  mutate(PC1 = rot.500$PC1, PC2 = rot.500$PC2, PC3 = rot.500$PC3, PC4 = rot.500$PC4)
+
+
+# 1000 genes.
+num_sel_genes <- 1000
+lfc_signal <- rnorm(num_sel_genes,0,1)
+
+
+lfc_1000 <- lfc_signal
+names(lfc_1000) <- sample(base_norm_counts$gene[between(base_norm_counts$sd_logfc,0.325,0.375)], num_sel_genes)
+
+coef_mat.1000 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_1000),
+                                                           rep(lfc_1000[names(lfc_1000)==gene[1]],n()),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_1000 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.1000)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.1000 <- as.data.frame(as.matrix(scale(norm_1000[,2:11])) %*% pca.train$rotation)
+
+norm_1000 %<>%
+  mutate(PC1 = rot.1000$PC1, PC2 = rot.1000$PC2, PC3 = rot.1000$PC3, PC4 = rot.1000$PC4)
+
+
+rbind(extract_pc2_optim(norm_100, prob = 0.99) %>%
+        mutate(num_sel = "100"),
+      extract_pc2_optim(norm_500, prob = 0.99) %>%
+        mutate(num_sel = "500"),
+      extract_pc2_optim(norm_1000, prob = 0.99) %>%
+        mutate(num_sel = "1000"),
+      extract_pc2_optim(test.tn_1, prob = 0.99) %>%
+        mutate(num_sel = "0")) %>%
+  ggplot(aes(PC2_median, percent_top.cumsum, color = num_sel)) +
+  geom_point() +
+  geom_smooth()
+
+```
+
+### Varying magnitude of logfc
+
+```{r}
+# lfc 1.
+num_sel_genes <- 200
+lfc_signal <- rep(1,num_sel_genes)
+
+
+lfc_l1 <- lfc_signal
+names(lfc_l1) <- names(lfc_low)
+
+coef_mat.l1 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_l1),
+                                                           rep(lfc_l1[names(lfc_l1)==gene[1]],n()),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_l1 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.l1)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.l1 <- as.data.frame(as.matrix(scale(norm_l1[,2:11])) %*% pca.train$rotation)
+
+norm_l1 %<>%
+  mutate(PC1 = rot.l1$PC1, PC2 = rot.l1$PC2, PC3 = rot.l1$PC3, PC4 = rot.l1$PC4)
+
+
+# lfc 2.
+num_sel_genes <- 200
+lfc_signal <- rep(2,num_sel_genes)
+
+
+lfc_l2 <- lfc_signal
+names(lfc_l2) <- names(lfc_low)
+
+coef_mat.l2 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_l2),
+                                                           rep(lfc_l2[names(lfc_l2)==gene[1]],n()),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_l2 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.l2)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.l2 <- as.data.frame(as.matrix(scale(norm_l2[,2:11])) %*% pca.train$rotation)
+
+norm_l2 %<>%
+  mutate(PC1 = rot.l2$PC1, PC2 = rot.l2$PC2, PC3 = rot.l2$PC3, PC4 = rot.l2$PC4)
+
+
+# lfc 3.
+num_sel_genes <- 200
+lfc_signal <- rep(3,num_sel_genes)
+
+
+lfc_l3 <- lfc_signal
+names(lfc_l3) <- names(lfc_low)
+
+coef_mat.l3 <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_l3),
+                                                           rep(lfc_l3[names(lfc_l3)==gene[1]],n()),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_l3 <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.l3)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.l3 <- as.data.frame(as.matrix(scale(norm_l3[,2:11])) %*% pca.train$rotation)
+
+norm_l3 %<>%
+  mutate(PC1 = rot.l3$PC1, PC2 = rot.l3$PC2, PC3 = rot.l3$PC3, PC4 = rot.l3$PC4)
+
+
+rbind(extract_pc2_optim(norm_l1, prob = 0.99) %>%
+        mutate(lfc = "1"),
+      extract_pc2_optim(norm_l2, prob = 0.99) %>%
+        mutate(lfc = "2"),
+      extract_pc2_optim(norm_l3, prob = 0.99) %>%
+        mutate(lfc = "3"),
+      extract_pc2_optim(test.tn_1, prob = 0.99) %>%
+        mutate(lfc = "0")) %>%
+  ggplot(aes(PC2_median, percent_top.cumsum, color = lfc)) +
+  geom_point() +
+  geom_smooth()
+
+
+```
+
+
+
+# Real screen data
 
 ```{r}
 # UAT bthin for true LFC.
@@ -336,10 +653,9 @@ vv <- read.table("/Users/alexkalinka/git-projects/fgc_crispr_pipeline_UAT/data/c
   filter(num_guides == 5) %>%
   select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1) %>%
   do(data.frame(expand_guides(.))) %>%
-  ungroup() %>%
-  mutate(hit = gene %in% names(bb))
+  ungroup()
 
-rr1 <- as.data.frame(as.matrix(scale(vv[,2:11])) %*% pp$rotation)
+rr1 <- as.data.frame(as.matrix(scale(vv[,2:11])) %*% pca.train$rotation)
 
 vv %<>%
   mutate(PC1 = rr1$PC1, PC2 = rr1$PC2, PC3 = rr1$PC3, PC4 = rr1$PC4)
@@ -371,11 +687,9 @@ ww <- read.table("/Users/alexkalinka/data/az_cruk/cdc7/Comp-SW480/counts/combine
   select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1,
          -FGC0005_01_03_03,-FGC0005_01_03_04,-FGC0005_01_03_05,-FGC0005_01_03_06) %>%
   do(data.frame(expand_guides(.))) %>%
-  ungroup() %>%
-  mutate(hit = gene %in% tt$Gene,
-         hit_uncorr = gene %in% ww_hits$id[ww_hits$hit])
+  ungroup()
 
-rr2 <- as.data.frame(as.matrix(scale(ww[,2:11])) %*% pp$rotation)
+rr2 <- as.data.frame(as.matrix(scale(ww[,2:11])) %*% pca.train$rotation)
 
 ww %<>%
   mutate(PC1 = rr2$PC1, PC2 = rr2$PC2, PC3 = rr2$PC3, PC4 = rr2$PC4)
@@ -400,11 +714,9 @@ kk <- read.table("/Users/alexkalinka/data/az_cruk/cdc7/Comp-RKO/counts/combined_
   select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1,
          -FGC0005_01_02_03,-FGC0005_01_02_04,-FGC0005_01_02_05,-FGC0005_01_02_06) %>%
   do(data.frame(expand_guides(.))) %>%
-  ungroup() %>%
-  mutate(hit = gene %in% tt$Gene,
-         hit_uncorr = gene %in% ww_hits$id[ww_hits$hit])
+  ungroup()
 
-rr3 <- as.data.frame(as.matrix(scale(kk[,2:11])) %*% pp$rotation)
+rr3 <- as.data.frame(as.matrix(scale(kk[,2:11])) %*% pca.train$rotation)
 
 kk %<>%
   mutate(PC1 = rr3$PC1, PC2 = rr3$PC2, PC3 = rr3$PC3, PC4 = rr3$PC4)
@@ -431,11 +743,9 @@ cc <- read.table("/Users/alexkalinka/data/az_cruk/cdc7/Comp-HCT116/counts/combin
   select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1,
          -FGC0005_01_04_04,-FGC0005_01_04_05,-FGC0005_01_04_07,-FGC0005_01_04_08) %>%
   do(data.frame(expand_guides(.))) %>%
-  ungroup() %>%
-  mutate(hit = gene %in% tt$Gene,
-         hit_uncorr = gene %in% ww_hits$id[ww_hits$hit])
+  ungroup()
 
-rr4 <- as.data.frame(as.matrix(scale(cc[,2:11])) %*% pp$rotation)
+rr4 <- as.data.frame(as.matrix(scale(cc[,2:11])) %*% pca.train$rotation)
 
 cc %<>%
   mutate(PC1 = rr4$PC1, PC2 = rr4$PC2, PC3 = rr4$PC3, PC4 = rr4$PC4)
@@ -460,30 +770,29 @@ uu <- read.table("/Users/alexkalinka/data/az_cruk/cdc7/Comp-HT-29/counts/combine
   select(-num_guides,-control.1,-control.2,-treat.1,-treat.2,-mc1,
          -FGC0005_01_01_03,-FGC0005_01_01_04,-FGC0005_01_01_05,-FGC0005_01_01_06) %>%
   do(data.frame(expand_guides(.))) %>%
-  ungroup() %>%
-  mutate(hit = gene %in% tt$Gene,
-         hit_uncorr = gene %in% ww_hits$id[ww_hits$hit])
+  ungroup()
 
-rr5 <- as.data.frame(as.matrix(scale(uu[,2:11])) %*% pp$rotation)
+rr5 <- as.data.frame(as.matrix(scale(uu[,2:11])) %*% pca.train$rotation)
 
 uu %<>%
   mutate(PC1 = rr5$PC1, PC2 = rr5$PC2, PC3 = rr5$PC3, PC4 = rr5$PC4)
 
 
-ggplot(data, aes(PC1, PC2)) + 
-  geom_hex() +
-  geom_point(data = data %>% filter(hit), aes(color = "hit")) +
-  geom_point(data=vv%>%filter(hit),aes(PC1,PC2,color="true_lfc")) +
-  geom_point(data=ww%>%filter(hit),aes(PC1,PC2,color="sw480")) +
-  geom_point(data=kk%>%filter(hit),aes(PC1,PC2,color="rko")) +
-  geom_point(data=cc%>%filter(hit),aes(PC1,PC2,color="hct116")) +
-  geom_point(data=uu%>%filter(hit),aes(PC1,PC2,color="ht29"))
-
-
 ```
 
 ```{r}
-nn <- extract_pc2_optim(vv,0.975)
+rbind(extract_pc2_optim(kk, prob = 0.99) %>%
+        mutate(cell_line = "RKO"),
+      extract_pc2_optim(cc, prob = 0.99) %>%
+        mutate(cell_line = "HCT116"),
+      extract_pc2_optim(ww, prob = 0.99) %>%
+        mutate(cell_line = "SW480"),
+      extract_pc2_optim(uu, prob = 0.99) %>%
+        mutate(cell_line = "HT29")) %>%
+  ggplot(aes(PC2_median, percent_top.cumsum, color = cell_line)) +
+  geom_point() +
+  geom_smooth() +
+  xlim(-2,10)
 
 ```
 
