@@ -24,6 +24,13 @@ suppressMessages(library(tidyr))
 suppressMessages(library(magrittr))
 suppressMessages(library(ggplot2))
 suppressMessages(library(dplyr))
+suppressMessages(library(seqgendiff))
+
+data_root <- "~/data/az_cruk"
+
+select <- dplyr::select
+filter <- dplyr::filter
+rename <- dplyr::rename
 
 
 # Mageck false positive hits.
@@ -33,13 +40,235 @@ mfp <- read.table("~/data/az_cruk/ht29-francesco-iorio/01_Counts assembled/mfp-1
   ungroup()
 
 # Normalized data.
-load("~/data/az_cruk/ht29-francesco-iorio/01_normalised_and_FCs/HT29_c903.tsv_normCounts.Rdata")
+load_normalised_counts <- function(path){
+  load(path)
+  return(normed)
+}
+
+
+path_ht29 <- file.path(data_root,"ht29-francesco-iorio","01_normalised_and_FCs")
+
+
+# Assemble the sgRNAs, genes, and the two plasmid count replicates.
+c903 <- load_normalised_counts(file.path(path_ht29,"HT29_c903.tsv_normCounts.RData"))
+c904 <- load_normalised_counts(file.path(path_ht29,"HT29_c904.tsv_normCounts.RData"))
+c905 <- load_normalised_counts(file.path(path_ht29,"HT29_c905.tsv_normCounts.RData"))
+c906 <- load_normalised_counts(file.path(path_ht29,"HT29_c906.tsv_normCounts.RData"))
+c907 <- load_normalised_counts(file.path(path_ht29,"HT29_c907.tsv_normCounts.RData"))
+c908 <- load_normalised_counts(file.path(path_ht29,"HT29_c908.tsv_normCounts.RData"))
+
+sgrna_comm <- Reduce(intersect, list(c903$sgRNA, c904$sgRNA, c905$sgRNA, c906$sgRNA, c907$sgRNA, c908$sgRNA))
+
+c903 %<>% filter(sgRNA %in% sgrna_comm)
+c904 %<>% filter(sgRNA %in% sgrna_comm)
+c905 %<>% filter(sgRNA %in% sgrna_comm)
+c906 %<>% filter(sgRNA %in% sgrna_comm)
+c907 %<>% filter(sgRNA %in% sgrna_comm)
+c908 %<>% filter(sgRNA %in% sgrna_comm)
+
 
 expand_guides <- function(data){
   ret <- t(matrix(unlist(c(data[,3:4]),1,10)))
   ret <- t(apply(ret, 1, function(x) return(sort(x))))
   return(as.data.frame(ret))
 }
+
+
+# Get normalized reads ready for PCA.
+process_reads <- function(data, control_1, control_2, treat_1, treat_2, numguides, norm=T){
+  c1 <- sym(control_1); c2 <- sym(control_2); t1 <- sym(treat_1); t2 <- sym(treat_2)
+  data %<>%
+    select(sgRNA, gene, !!c1, !!c2, !!t1, !!t2)
+  if(norm){
+    # Library depth normalization.
+    data %<>%
+      mutate(mc1 = median(c(sum(!!c1),sum(!!c2),sum(!!t1),sum(!!t2))), 
+             control.1 = mc1 * (!!c1)/sum(!!c1),
+             control.2 = mc1 * (!!c2)/sum(!!c2),
+             treat.1 = mc1 * (!!t1)/sum(!!t1),
+             treat.2 = mc1 * (!!t2)/sum(!!t2)) %>%
+      select(-mc1)
+  }else{
+    data %<>%
+      rename(control.1 = !!c1, control.2 = !!c2,
+             treat.1 = !!t1, treat.2 = !!t2)
+  }
+  # logFC for replicate pairs.
+  data %<>%
+    mutate(lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+    group_by(gene) %>%
+    mutate(num_guides = n()) %>%
+    filter(num_guides == numguides) %>%
+    select(-num_guides,-control.1,-control.2,-treat.1,-treat.2) %>%
+    do(data.frame(expand_guides(.))) %>%
+    ungroup()
+  return(data)
+}
+
+
+extract_pc2_optim <- function(data, prob){
+  # top x% of abs(PC1) genes.
+  cutoff <- quantile(abs(data$PC1),prob)
+  genes <- data$gene[abs(data$PC1) >= cutoff]
+  data %<>%
+    arrange(PC2) %>%
+    mutate(pc2_group = cut(PC2,70)) %>%
+    group_by(pc2_group) %>%
+    summarise(percent_top = 100*sum(gene %in% genes)/length(genes),
+              PC2_median = median(PC2)) %>%
+    ungroup() %>%
+    mutate(percent_top.cumsum = cumsum(percent_top))
+  return(data)
+}
+
+```
+
+# Learn the PCA rotation matrix from 3 true negative datasets
+
+```{r}
+ht29.true_neg <- rbind(
+  process_reads(c903, "HT29_c903R1","HT29_c903R2","HT29_c903R3","HT29_c903R4",numguides = 5,norm=F),
+  process_reads(c905, "HT29_c905R1","HT29_c905R3","HT29_c905R2","HT29_c905R6",numguides = 5,norm=F),
+  process_reads(c906, "HT29_c906R2","HT29_c906R7","HT29_c906R3","HT29_c906R8",numguides = 5,norm=F)
+)
+
+
+# Scale and center data so we diagonalize the correlation matrix instead of the covariance matrix.
+pca.train <- prcomp(scale(ht29.true_neg[,2:11]))
+
+ht29.true_neg %<>%
+  mutate(PC1 = pca.train$x[,1], PC2 = pca.train$x[,2], PC3 = pca.train$x[,3], PC4 = pca.train$x[,4])
+
+tn.cumsum <- extract_pc2_optim(ht29.true_neg, 0.99)
+
+```
+
+# Test untrained data
+
+## True negatives
+
+```{r}
+test.tn_1 <- process_reads(c905, "HT29_c905R4","HT29_c905R5","HT29_c905R7","HT29_c905R9",numguides = 5,norm=F) %>%
+  rowwise() %>%
+  mutate(sd_logfc = sd(c(V1,V2,V3,V4,V5,V6,V7,V8,V9,V10),na.rm=T)) %>%
+  ungroup()
+
+base_norm_counts <- c905 %>%
+  select(sgRNA,gene,HT29_c905R4,HT29_c905R5,HT29_c905R7,HT29_c905R9) %>%
+  mutate(sd_logfc = test.tn_1$sd_logfc[match(gene,test.tn_1$gene)]) %>%
+  filter(!is.na(sd_logfc)) %>%
+  group_by(gene) %>%
+  mutate(num_guides = n()) %>%
+  ungroup() %>%
+  filter(num_guides == 5) %>%
+  mutate(HT29_c905R4 = round(HT29_c905R4), HT29_c905R5 = round(HT29_c905R5), 
+         HT29_c905R7 = round(HT29_c905R7), HT29_c905R9 = round(HT29_c905R9))
+
+rot.test.tn_1 <- as.data.frame(as.matrix(scale(test.tn_1[,2:11])) %*% pca.train$rotation)
+
+test.tn_1 %<>%
+  mutate(PC1 = rot.test.tn_1$PC1, PC2 = rot.test.tn_1$PC2, 
+         PC3 = rot.test.tn_1$PC3, PC4 = rot.test.tn_1$PC4)
+
+test.tn_1 %>%
+  extract_pc2_optim(prob = 0.99) %>%
+  ggplot(aes(PC2_median, percent_top.cumsum)) +
+  geom_point() +
+  geom_smooth()
+
+```
+
+## Signal added using `seqgendiff`
+
+### Varying SD(logfc)
+
+```{r}
+# design matrix.
+design_cols <- rep(0,4)
+design_cols[3:4] <- 1
+design_mat <- matrix(design_cols)
+
+# Same signal added to gene sets with increasing SD(logfc).
+num_sel_genes <- 200
+lfc_signal <- rnorm(num_sel_genes,0,1)
+
+# Low noise.
+lfc_low <- lfc_signal
+names(lfc_low) <- sample(base_norm_counts$gene[base_norm_counts$sd_logfc < 0.3], num_sel_genes)
+
+coef_mat.low <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_low),
+                                                           rep(lfc_low[names(lfc_low)==gene[1]],n()),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_low <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.low)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.low <- as.data.frame(as.matrix(scale(norm_low[,2:11])) %*% pca.train$rotation)
+
+norm_low %<>%
+  mutate(PC1 = rot.low$PC1, PC2 = rot.low$PC2, PC3 = rot.low$PC3, PC4 = rot.low$PC4)
+
+# High noise.
+lfc_high <- lfc_signal
+names(lfc_high) <- sample(base_norm_counts$gene[base_norm_counts$sd_logfc > 0.4], num_sel_genes)
+
+coef_mat.high <- as.matrix(base_norm_counts %>%
+                            group_by(gene) %>%
+                            mutate(gene_indicator = ifelse(gene %in% names(lfc_high),
+                                                           rep(lfc_high[names(lfc_high)==gene[1]],n()),
+                                                           rep(0,n()))) %>%
+                            ungroup() %>%
+                            select(gene_indicator))
+
+norm_high <- as.data.frame(thin_diff(mat = as.matrix(base_norm_counts[,3:6]), 
+                   design_fixed = design_mat, 
+                   coef_fixed = coef_mat.high)$mat) %>%
+  rename(control.1 = V1, control.2 = V2, treat.1 = V3, treat.2 = V4) %>%
+  mutate(gRNA = base_norm_counts$sgRNA, gene = base_norm_counts$gene,
+         lfc.1 = log2((control.1+5)/(treat.1+5)), 
+         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+  group_by(gene) %>%
+  select(-control.1,-control.2,-treat.1,-treat.2) %>%
+  do(data.frame(expand_guides(.))) %>%
+  ungroup()
+
+rot.high <- as.data.frame(as.matrix(scale(norm_high[,2:11])) %*% pca.train$rotation)
+
+norm_high %<>%
+  mutate(PC1 = rot.high$PC1, PC2 = rot.high$PC2, PC3 = rot.high$PC3, PC4 = rot.high$PC4)
+
+
+rbind(extract_pc2_optim(norm_low, prob = 0.99) %>%
+        mutate(SD_lfc = "low"),
+      extract_pc2_optim(norm_high, prob = 0.99) %>%
+        mutate(SD_lfc = "high")) %>%
+  ggplot(aes(PC2_median, percent_top.cumsum, color = SD_lfc)) +
+  geom_point() +
+  geom_smooth()
+
+```
+
+### Varying number of guides with signal added
+
+
+
+
+```{r}
+load("~/data/az_cruk/ht29-francesco-iorio/01_normalised_and_FCs/HT29_c903.tsv_normCounts.Rdata")
 
 data <- normed %>%
   select(-ERS717283.plasmid,-HT29_c903R5,-HT29_c903R6) %>%
@@ -254,21 +483,6 @@ ggplot(data, aes(PC1, PC2)) +
 ```
 
 ```{r}
-extract_pc2_optim <- function(data,prob){
-  # top x% of abs(PC1) genes.
-  cutoff <- quantile(abs(data$PC1),prob)
-  genes <- data$gene[abs(data$PC1) >= cutoff]
-  data %<>%
-    arrange(PC2) %>%
-    mutate(pc2_group = cut(PC2,70)) %>%
-    group_by(pc2_group) %>%
-    summarise(percent_top = 100*sum(gene %in% genes)/length(genes),
-              PC2_median = median(PC2)) %>%
-    ungroup() %>%
-    mutate(percent_top.cumsum = cumsum(percent_top))
-  return(data)
-}
-
 nn <- extract_pc2_optim(vv,0.975)
 
 ```
