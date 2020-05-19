@@ -87,7 +87,7 @@ process_reads <- function(data, control_1, control_2, treat_1, treat_2, numguide
              control.2 = mc1 * (!!c2)/sum(!!c2),
              treat.1 = mc1 * (!!t1)/sum(!!t1),
              treat.2 = mc1 * (!!t2)/sum(!!t2)) %>%
-      select(-mc1)
+      select(-mc1, -(!!c1),-(!!c2),-(!!t1),-(!!t2))
   }else{
     data %<>%
       rename(control.1 = !!c1, control.2 = !!c2,
@@ -96,7 +96,7 @@ process_reads <- function(data, control_1, control_2, treat_1, treat_2, numguide
   # logFC for replicate pairs.
   data %<>%
     mutate(lfc.1 = log2((control.1+5)/(treat.1+5)), 
-         lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
+           lfc.2 = log2((control.2+5)/(treat.2+5))) %>%
     group_by(gene) %>%
     mutate(num_guides = n()) %>%
     filter(num_guides == numguides) %>%
@@ -120,6 +120,17 @@ extract_pc2_optim <- function(data, prob){
     ungroup() %>%
     mutate(percent_top.cumsum = cumsum(percent_top))
   return(data)
+}
+
+
+read_mageck_gene_summ <- function(files){
+  ret <- NULL
+  for(file in files){
+    screen <- gsub("^.*?\\/(\\S+?)\\/mageck.*$","\\1",file)
+    td <- read.delim(file, header=T, stringsAsFactors = F)
+    ret <- rbind(ret, data.frame(screen = screen, td), stringsAsFactors=F)
+  }
+  return(ret)
 }
 
 ```
@@ -633,6 +644,8 @@ rbind(extract_pc2_optim(norm_l1, prob = 0.99) %>%
 
 # Real screen data
 
+## CDC7
+
 ```{r}
 # UAT bthin for true LFC.
 bb <- readRDS(file="/Users/alexkalinka/git-projects/fgc_crispr_pipeline_UAT/data/bthin_lfc_rnorm.rds")
@@ -795,4 +808,205 @@ rbind(extract_pc2_optim(kk, prob = 0.99) %>%
   xlim(-2,10)
 
 ```
+
+
+## EGFR
+
+```{r}
+# EGFR KO data - multiple drugs used.
+egfr_count_files <- list.files("~/data/az_cruk/egfr/crisprn", pattern = "_plasmid_read_counts.txt$", 
+                               recursive = T, full.names = T)
+# 11_18 Gef.
+e_11_18_Gef <- process_reads(read.table(egfr_count_files[1], header=T, stringsAsFactors = F),
+                            "control1","control2","treatment1","treatment2",5)
+
+rot.e_11_18_Gef <- as.data.frame(as.matrix(scale(e_11_18_Gef[,2:11])) %*% pca.train$rotation)
+
+e_11_18_Gef %<>%
+  mutate(PC1 = rot.e_11_18_Gef$PC1, PC2 = rot.e_11_18_Gef$PC2, PC3 = rot.e_11_18_Gef$PC3, PC4 = rot.e_11_18_Gef$PC4)
+
+# 11_18 Osim.
+e_11_18_Osim <- process_reads(read.table(egfr_count_files[2], header=T, stringsAsFactors = F),
+                            "control1","control2","treatment1","treatment2",5)
+
+rot.e_11_18_Osim <- as.data.frame(as.matrix(scale(e_11_18_Osim[,2:11])) %*% pca.train$rotation)
+
+e_11_18_Osim %<>%
+  mutate(PC1 = rot.e_11_18_Osim$PC1, PC2 = rot.e_11_18_Osim$PC2, PC3 = rot.e_11_18_Osim$PC3, PC4 = rot.e_11_18_Osim$PC4)
+
+# HCC827 Gef.
+e_hcc827_Gef <- process_reads(read.table(egfr_count_files[3], header=T, stringsAsFactors = F),
+                            "control1","control2","treatment1","treatment2",5)
+
+rot.e_hcc827_Gef <- as.data.frame(as.matrix(scale(e_hcc827_Gef[,2:11])) %*% pca.train$rotation)
+
+e_hcc827_Gef %<>%
+  mutate(PC1 = rot.e_hcc827_Gef$PC1, PC2 = rot.e_hcc827_Gef$PC2, PC3 = rot.e_hcc827_Gef$PC3, PC4 = rot.e_hcc827_Gef$PC4)
+
+# HCC827 Osim.
+e_hcc827_Osim <- process_reads(read.table(egfr_count_files[4], header=T, stringsAsFactors = F),
+                            "control1","control2","treatment1","treatment2",5)
+
+rot.e_hcc827_Osim <- as.data.frame(as.matrix(scale(e_hcc827_Osim[,2:11])) %*% pca.train$rotation)
+
+e_hcc827_Osim %<>%
+  mutate(PC1 = rot.e_hcc827_Osim$PC1, PC2 = rot.e_hcc827_Osim$PC2, PC3 = rot.e_hcc827_Osim$PC3, PC4 = rot.e_hcc827_Osim$PC4)
+
+# HCC827-A15 Osim.
+e_hcc827_a15_Osim <- process_reads(read.table(egfr_count_files[5], header=T, stringsAsFactors = F),
+                            "control1","control2","treatment1","treatment2",5)
+
+rot.e_hcc827_a15_Osim <- as.data.frame(as.matrix(scale(e_hcc827_a15_Osim[,2:11])) %*% pca.train$rotation)
+
+e_hcc827_a15_Osim %<>%
+  mutate(PC1 = rot.e_hcc827_a15_Osim$PC1, PC2 = rot.e_hcc827_a15_Osim$PC2, 
+         PC3 = rot.e_hcc827_a15_Osim$PC3, PC4 = rot.e_hcc827_a15_Osim$PC4)
+
+# PC-9 Gef.
+e_pc9_Gef <- process_reads(read.table(egfr_count_files[6], header=T, stringsAsFactors = F),
+                            "control1","control2","treatment1","treatment2",5)
+
+rot.e_pc9_Gef <- as.data.frame(as.matrix(scale(e_pc9_Gef[,2:11])) %*% pca.train$rotation)
+
+e_pc9_Gef %<>%
+  mutate(PC1 = rot.e_pc9_Gef$PC1, PC2 = rot.e_pc9_Gef$PC2, 
+         PC3 = rot.e_pc9_Gef$PC3, PC4 = rot.e_pc9_Gef$PC4)
+
+# PC-9 Osim.
+e_pc9_Osim <- process_reads(read.table(egfr_count_files[7], header=T, stringsAsFactors = F),
+                            "control1","control2","treatment1","treatment2",5)
+
+rot.e_pc9_Osim <- as.data.frame(as.matrix(scale(e_pc9_Osim[,2:11])) %*% pca.train$rotation)
+
+e_pc9_Osim %<>%
+  mutate(PC1 = rot.e_pc9_Osim$PC1, PC2 = rot.e_pc9_Osim$PC2, 
+         PC3 = rot.e_pc9_Osim$PC3, PC4 = rot.e_pc9_Osim$PC4)
+
+# PC-9 GR5 Osim.
+e_pc9_gr5_Osim <- process_reads(read.table(egfr_count_files[8], header=T, stringsAsFactors = F),
+                            "control1","control2","treatment1","treatment2",5)
+
+rot.e_pc9_gr5_Osim <- as.data.frame(as.matrix(scale(e_pc9_gr5_Osim[,2:11])) %*% pca.train$rotation)
+
+e_pc9_gr5_Osim %<>%
+  mutate(PC1 = rot.e_pc9_gr5_Osim$PC1, PC2 = rot.e_pc9_gr5_Osim$PC2, 
+         PC3 = rot.e_pc9_gr5_Osim$PC3, PC4 = rot.e_pc9_gr5_Osim$PC4)
+
+
+```
+
+```{r}
+get_top_pc1_genes <- function(data, prob){
+  # top x% of abs(PC1) genes.
+  cutoff <- quantile(abs(data$PC1),prob)
+  genes <- data$gene[abs(data$PC1) >= cutoff]
+  pc1 <- data$PC1[data$gene %in% genes]
+  return(data.frame(gene = genes, PC1 = pc1, stringsAsFactors = F))
+}
+
+```
+
+```{r}
+# Mageck output - to evaluate performance in terms of 10% FDR hits.
+egfr_mageck_files <- list.files("~/data/az_cruk/egfr/crisprn",
+                                pattern = "Treatment_vs_Control.gene_summary.txt",
+                                recursive = T, full.names = T)
+
+egfr_mageck_genesumm <- read_mageck_gene_summ(egfr_mageck_files) 
+egfr_mageck <- egfr_mageck_genesumm %>%
+  group_by(screen) %>%
+  summarise(hits_fdr_10pct = sum(neg.fdr < 0.1) + sum(pos.fdr < 0.1)) %>%
+  ungroup()
+egfr_mageck_tophit_pvals <- egfr_mageck_genesumm %>%
+  rowwise() %>%
+  mutate(log10_pval = ifelse(neg.p.value < pos.p.value,
+                             -log10(neg.p.value),
+                             -log10(pos.p.value))) %>%
+  ungroup()
+  
+  
+  
+# Top PC1 pvals.
+egfr_tg <- rbind(e_11_18_Gef %>%
+                   get_top_pc1_genes(prob=0.99) %>%
+                   mutate(screen = "11-18_Gef", 
+                          log10_pval_top_pc1 = egfr_mageck_tophit_pvals$log10_pval[match(gene,egfr_mageck_tophit_pvals$id)]),
+                 e_11_18_Osim %>%
+                   get_top_pc1_genes(prob=0.99) %>%
+                   mutate(screen = "11-18_Osim",
+                          log10_pval_top_pc1 = egfr_mageck_tophit_pvals$log10_pval[match(gene,egfr_mageck_tophit_pvals$id)]),
+                 e_hcc827_Gef %>%
+                   get_top_pc1_genes(prob=0.99) %>%
+                   mutate(screen = "HCC827_Gef",
+                          log10_pval_top_pc1 = egfr_mageck_tophit_pvals$log10_pval[match(gene,egfr_mageck_tophit_pvals$id)]),
+                 e_hcc827_Osim %>%
+                   get_top_pc1_genes(prob=0.99) %>%
+                   mutate(screen = "HCC827_Osim",
+                          log10_pval_top_pc1 = egfr_mageck_tophit_pvals$log10_pval[match(gene,egfr_mageck_tophit_pvals$id)]),
+                 e_hcc827_a15_Osim %>%
+                   get_top_pc1_genes(prob=0.99) %>%
+                   mutate(screen = "HCC827-A15_Osim",
+                          log10_pval_top_pc1 = egfr_mageck_tophit_pvals$log10_pval[match(gene,egfr_mageck_tophit_pvals$id)]),
+                 e_pc9_Gef %>%
+                   get_top_pc1_genes(prob=0.99) %>%
+                   mutate(screen = "PC-9_Gef",
+                          log10_pval_top_pc1 = egfr_mageck_tophit_pvals$log10_pval[match(gene,egfr_mageck_tophit_pvals$id)]),
+                 e_pc9_Osim %>%
+                   get_top_pc1_genes(prob=0.99) %>%
+                   mutate(screen = "PC-9_Osim",
+                          log10_pval_top_pc1 = egfr_mageck_tophit_pvals$log10_pval[match(gene,egfr_mageck_tophit_pvals$id)]),
+                 e_pc9_gr5_Osim %>%
+                   get_top_pc1_genes(prob=0.99) %>%
+                   mutate(screen = "PC-9-GR5_Osim",
+                          log10_pval_top_pc1 = egfr_mageck_tophit_pvals$log10_pval[match(gene,egfr_mageck_tophit_pvals$id)]))
+
+
+egfr_pca <- rbind(extract_pc2_optim(e_11_18_Gef,0.99) %>%
+        mutate(screen = "11-18_Gef", 
+               num_hits = egfr_mageck$hits_fdr_10pct[match(screen,egfr_mageck$screen)]),
+      extract_pc2_optim(e_11_18_Osim,0.99) %>%
+        mutate(screen = "11-18_Osim",
+               num_hits = egfr_mageck$hits_fdr_10pct[match(screen,egfr_mageck$screen)]),
+      extract_pc2_optim(e_hcc827_Gef,0.99) %>%
+        mutate(screen = "HCC827_Gef",
+               num_hits = egfr_mageck$hits_fdr_10pct[match(screen,egfr_mageck$screen)]),
+      extract_pc2_optim(e_hcc827_Osim,0.99) %>%
+        mutate(screen = "HCC827_Osim",
+               num_hits = egfr_mageck$hits_fdr_10pct[match(screen,egfr_mageck$screen)]),
+      extract_pc2_optim(e_hcc827_a15_Osim,0.99) %>%
+        mutate(screen = "HCC827-A15_Osim",
+               num_hits = egfr_mageck$hits_fdr_10pct[match(screen,egfr_mageck$screen)]),
+      extract_pc2_optim(e_pc9_Gef,0.99) %>%
+        mutate(screen = "PC-9_Gef",
+               num_hits = egfr_mageck$hits_fdr_10pct[match(screen,egfr_mageck$screen)]),
+      extract_pc2_optim(e_pc9_Osim,0.99) %>%
+        mutate(screen = "PC-9_Osim",
+               num_hits = egfr_mageck$hits_fdr_10pct[match(screen,egfr_mageck$screen)]),
+      extract_pc2_optim(e_pc9_gr5_Osim,0.99) %>%
+        mutate(screen = "PC-9-GR5_Osim",
+               num_hits = egfr_mageck$hits_fdr_10pct[match(screen,egfr_mageck$screen)]))
+
+egfr_pca %>%
+  ggplot(aes(PC2_median, percent_top.cumsum,color=screen)) +
+  geom_point() +
+  geom_smooth()
+
+egfr_inflect <- egfr_pca %>%
+  group_by(screen) %>%
+  summarise(PC2_inflect = PC2_median[abs(percent_top.cumsum - 50) == min(abs(percent_top.cumsum - 50),na.rm=T)][1],
+            num_hits = num_hits[1]) %>%
+  ungroup()
+
+egfr_inflect %>%
+  ggplot(aes(PC2_inflect, num_hits, color = screen)) +
+  geom_point()
+
+egfr_tg %>%
+  mutate(PC2_inflect = egfr_inflect$PC2_inflect[match(screen,egfr_inflect$screen)]) %>%
+  ggplot(aes(PC2_inflect, log10_pval_top_pc1, group=screen, color=screen)) +
+  geom_point() +
+  geom_boxplot(notch=T)
+
+```
+
 
