@@ -36,11 +36,13 @@ genes.mod_fitn <- readRDS(file="~/data/az_cruk/depmap/depmap_lfc_modfitn.rds")
 ```
 
 ```{r,eval=F}
-depmap_fc <- read.csv(file.path(data_base_path,"Achilles_gene_effect.csv"), stringsAsFactors = F)
+depmap_fc <- read.csv(file.path(data_base_path,"depmap","Achilles_gene_effect.csv"), stringsAsFactors = F)
 
 ```
 
 # Cell line analysis
+
+## Moderately negative
 
 ```{r,eval=F}
 depmap.summ <- depmap_fc %>%
@@ -53,8 +55,47 @@ depmap.summ <- depmap_fc %>%
             CV.robust = mad(logFC, na.rm = T)/abs(median(logFC, na.rm = T))) %>%
   ungroup()
 
-genes.mod_fitn <- (depmap.summ %>% 
+genes.mod_neg <- (depmap.summ %>% 
                      filter(percent_cell_lines_range > 90))$gene
+
+```
+
+## Weakly negative
+
+```{r,eval=F}
+depmap.summ <- depmap_fc %>%
+  pivot_longer(-cell_line, names_to = "gene", values_to = "logFC") %>%
+  group_by(gene) %>%
+  summarise(num_cell_lines = length(unique(cell_line)),
+            percent_cell_lines_range = 100*sum(between(logFC,-0.8,-0.2), na.rm = T)/num_cell_lines,
+            logFC.median = median(logFC, na.rm=T),
+            CV = sd(logFC, na.rm=T)/abs(mean(logFC, na.rm=T)),
+            CV.robust = mad(logFC, na.rm = T)/abs(median(logFC, na.rm = T))) %>%
+  ungroup()
+
+genes.weak_neg <- (depmap.summ %>% 
+                     filter(percent_cell_lines_range > 90))$gene
+
+```
+
+## Weakly positive
+
+```{r,eval=F}
+depmap.summ <- depmap_fc %>%
+  pivot_longer(-cell_line, names_to = "gene", values_to = "logFC") %>%
+  group_by(gene) %>%
+  summarise(num_cell_lines = length(unique(cell_line)),
+            percent_cell_lines_range = 100*sum(between(logFC,0.2,1), na.rm = T)/num_cell_lines,
+            logFC.mean = mean(logFC, na.rm=T),
+            logFC.median = median(logFC, na.rm=T),
+            MAD = mad(logFC, na.rm = T),
+            CV = sd(logFC, na.rm=T)/abs(mean(logFC, na.rm=T)),
+            CV.robust = MAD/abs(median(logFC, na.rm = T))) %>%
+  ungroup()
+
+genes.weak_pos <- (depmap.summ %>% 
+                     filter(percent_cell_lines_range > 90))$gene
+
 
 ```
 
@@ -66,14 +107,17 @@ mouse.dnds <- getBM(attributes = c("external_gene_name","mmusculus_homolog_dn","
       filters = "hgnc_symbol", values = c(ess.genes$pan_cancer_Sanger,
                                           ess.genes$bagel_essential,
                                           ess.genes$bagel_nonessential,
-                                          genes.mod_fitn), mart = mart.hs) %>%
+                                          genes.mod_fitn,
+                                          genes.weak_fitn), 
+      mart = mart.hs) %>%
   mutate(gene_group = case_when(external_gene_name %in% ess.genes$pan_cancer_Sanger ~ "pan_cancer_Sanger",
                                 external_gene_name %in% ess.genes$bagel_nonessential ~ "non_essential_Hart",
                                 external_gene_name %in% ess.genes$bagel_essential ~ "essential_Hart",
-                                external_gene_name %in% genes.mod_fitn ~ "moderately_negative"),
+                                external_gene_name %in% genes.mod_fitn ~ "moderately_negative",
+                                external_gene_name %in% genes.weak_fitn ~ "weakly_negative"),
          dn_ds.mouse = mmusculus_homolog_dn/mmusculus_homolog_ds,
          gene_group = factor(gene_group, levels = c("pan_cancer_Sanger","essential_Hart",
-                                                    "moderately_negative","non_essential_Hart")))
+                                                    "moderately_negative","weakly_negative","non_essential_Hart")))
 
 
 ggplot(mouse.dnds, aes(gene_group, dn_ds.mouse, color = gene_group)) +
