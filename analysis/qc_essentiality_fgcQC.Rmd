@@ -1,0 +1,180 @@
+---
+title: 'FGC CRISPR screen: ROC and Precision-Recall curves'
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+params:
+  fgc_QC_output_R_object: FALSE
+---
+
+# Setup
+
+```{r}
+suppressMessages(library(fgcQC))
+suppressMessages(library(knitr))
+suppressMessages(library(ggplot2))
+
+
+usage <- "rmarkdown::render('qc_essentiality_fgcQC.Rmd', \noutput_file = 'out.html', \nparams = list(fgc_QC_output_R_object = 'path/to/fgcQC-r-object.rds')"
+
+if(is.logical(params$fgc_QC_output_R_object))
+  stop(paste("this script should be called with a path to an 'fgcQC' output R object:\n",usage))
+
+if(!file.exists(params$fgc_QC_output_R_object))
+  stop(paste("unable to find",params$fgc_QC_output_R_object))
+
+tryCatch(qc <- readRDS(file = params$fgc_QC_output_R_object),
+         error = function(e) stop(paste("unable to read",params$fgc_QC_output_R_object)))
+
+if(!inherits(qc,"fgcQC"))
+  stop(paste("expecting input to be an object of class 'fgcQC', got an object of class:",class(qc)))
+
+cat(paste("Loaded 'fgcQC' output:\n",params$fgc_QC_output_R_object))
+
+```
+
+```{r, results="asis"}
+# Function library.
+
+#' make_AUROC_table
+#'
+#' Makes an AUROC data frame.
+#'
+#' @param data A data frame containing the following columns: `True_Positive_Rate`, `False_Positive_Rate`, and `gene_set`.
+#'
+#' @return A data frame of AUROCs.
+make_AUROC_table <- function(data){
+  tryCatch({
+    data_auroc <- data %>%
+      dplyr::mutate(TP = !GENE %in% fgcQC::crispr_gene_sets$essential$hart_nonessential) %>%
+      fgcQC::calc_AUC(score_col = "BF", group = "gene_set") %>%
+      dplyr::rename(AUROC = AUC) %>%
+      dplyr::arrange(dplyr::desc(AUROC))
+  },
+  error = function(e) stop(paste("unable to make AUROC table:",e))
+  )
+  return(data_auroc)
+}
+
+
+#' make_AUPrRc_table
+#'
+#' Makes an AUPrRc data frame.
+#'
+#' @param data A data frame containing the following columns: `Recall`, `Precision`, and `gene_set`.
+#'
+#' @return A data frame of AUPrRcs.
+make_AUPrRc_table <- function(data){
+  tryCatch({
+    data_auprrc <- data %>%
+      dplyr::group_by(gene_set) %>%
+      dplyr::summarise(AUPrRc = AUPrRc[1]) %>%
+      dplyr::ungroup() %>%
+      dplyr::arrange(dplyr::desc(AUPrRc))
+  },
+  error = function(e) stop(paste("unable to make AUPrRc table:",e))
+  )
+  return(data_auprrc)
+}
+
+
+#' plot_ROC_fgcQC
+#' 
+#' Plot ROC curves for sets of essential genes.
+#' 
+#' @param data A data frame containing the following columns: `True_Positive_Rate`, `False_Positive_Rate`, and `gene_set`.
+#' @param title The plot title.
+#'
+#' @return A ROC plot for sets of genes.
+plot_ROC_fgcQC <- function(data, title){
+  tryCatch({
+    pl <- ggplot(data, aes(False_Positive_Rate, True_Positive_Rate, color = gene_set)) +
+      geom_line() +
+      geom_abline(linetype = "dashed") +
+      ggtitle(paste("ROC curves:",title))
+    print(pl)
+    # Add a table of AUROCs.
+    auroc <- make_AUROC_table(data)
+    return(knitr::kable(auroc))
+    },
+    error = function(e) stop(paste("unable to plot ROC curves:",e))
+  )
+}
+
+
+#' plot_PrRc_fgcQC
+#' 
+#' Plot Precision-Recall curves for sets of essential genes.
+#' 
+#' @param data A data frame containing the following columns: `Recall`, `Precision`, and `gene_set`.
+#' @param title The plot title.
+#'
+#' @return A ROC plot for sets of genes.
+plot_PrRc_fgcQC <- function(data, title){
+  tryCatch({
+    pl <- ggplot(data, aes(Recall, Precision, color = gene_set)) +
+      geom_line() +
+      geom_hline(yintercept = 0.5, linetype = "dashed") +
+      ggtitle(paste("Precision-Recall curves:",title))
+    print(pl)
+    # Add a table of AUPrRc.
+    auprrc <- make_AUPrRc_table(data)
+    return(knitr::kable(auprrc))
+    },
+    error = function(e) stop(paste("unable to plot Precision-Recall curves:",e))
+  )
+}
+
+
+#' plot_perf_curves_fgcQC
+#' 
+#' Plots a ROC or Precision-Recall curve for sets of essential genes.
+#' 
+#' @param qc_fgcQC An object of class `fgcQC`.
+#' @param type A character string naming the plot type. One of: `ROC` or `PrRc`.
+#' 
+#' @return A ROC or Precision-Recall curve for sets of essential genes.
+plot_perf_curves_fgcQC <- function(qc_fgcQC, type){
+  if(!inherits(qc_fgcQC,"fgcQC"))
+    stop(paste("expecting input to be an object of class 'fgcQC', got an object of class:",class(qc_fgcQC)))
+  
+  tryCatch({
+    if(type == "ROC"){
+      for(i in 1:length(qc_fgcQC$bagel_ROC)){
+        comp <- gsub("^bagel_(\\S+?)$","\\1",names(qc_fgcQC$bagel_ROC)[i])
+        plot_ROC_fgcQC(qc_fgcQC$bagel_ROC[[i]], comp)
+      }
+    }else{
+      for(i in 1:length(qc_fgcQC$bagel_PrRc)){
+        comp <- gsub("^bagel_(\\S+?)$","\\1",names(qc_fgcQC$bagel_PrRc)[i])
+        plot_PrRc_fgcQC(qc_fgcQC$bagel_PrRc[[i]], comp)
+      }
+    }
+  },
+  error = function(e) stop(paste("unable to plot performance curves:",e))
+  )
+}
+
+```
+
+# ROC curves
+
+```{r}
+plot_perf_curves_fgcQC(qc, type = "ROC")
+```
+
+
+# Precision-Recall curves
+
+```{r}
+plot_perf_curves_fgcQC(qc, type = "PrRc")
+```
+
+
