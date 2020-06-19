@@ -19,7 +19,6 @@ params:
 ```{r}
 suppressMessages(library(fgcQC))
 suppressMessages(library(ggplot2))
-suppressMessages(library(gt))
 
 
 usage <- "rmarkdown::render('qc_essentiality_fgcQC.Rmd', \noutput_file = 'out.html', \nparams = list(fgc_QC_output_R_object = 'path/to/fgcQC-r-object.rds')"
@@ -40,7 +39,7 @@ cat(paste("Loaded 'fgcQC' output:\n",params$fgc_QC_output_R_object))
 
 ```
 
-```{r, results="asis"}
+```{r}
 # Function library.
 
 #' make_AUROC_df
@@ -64,26 +63,6 @@ make_AUROC_df <- function(data){
 }
 
 
-#' make_AUROC_table
-#'
-#' Makes an AUROC `gt` table for html printing.
-#'
-#' @param data A data frame containing the following columns: `True_Positive_Rate`, `False_Positive_Rate`, and `gene_set`.
-#' @param subtitle A subtitle for the table.
-#'
-#' @return A data frame of AUROCs.
-make_AUROC_table <- function(data, subtitle){
-  tryCatch({
-    data_gt <- data %>%
-      gt::gt() %>%
-      gt::tab_header(title = "", subtitle = subtitle)
-  },
-  error = function(e) stop(paste("unable to make AUROC gt table:",e))
-  )
-  return(data_auroc)
-}
-
-
 #' make_AUPrRc_df
 #'
 #' Makes an AUPrRc data frame.
@@ -95,7 +74,10 @@ make_AUPrRc_df <- function(data){
   tryCatch({
     data_auprrc <- data %>%
       dplyr::group_by(gene_set) %>%
-      dplyr::summarise(AUPrRc = AUPrRc[1]) %>%
+      dplyr::summarise(AUPrRc = AUPrRc[1], 
+                       Sensitivity_FDR_10pct = Sensitivity_FDR_10pct[1],
+                       Sensitivity_FDR_5pct = Sensitivity_FDR_5pct[1],
+                       .groups = 'drop') %>%
       dplyr::ungroup() %>%
       dplyr::arrange(dplyr::desc(AUPrRc))
   },
@@ -120,9 +102,8 @@ plot_ROC_fgcQC <- function(data, title){
       geom_abline(linetype = "dashed") +
       ggtitle(paste("ROC curves:",title))
     print(pl)
-    # Add a table of AUROCs.
-    auroc <- make_AUROC_df(data)
-    
+    # Return a table of AUROCs.
+    print(make_AUROC_df(data))
     },
     error = function(e) stop(paste("unable to plot ROC curves:",e))
   )
@@ -144,9 +125,8 @@ plot_PrRc_fgcQC <- function(data, title){
       geom_hline(yintercept = 0.5, linetype = "dashed") +
       ggtitle(paste("Precision-Recall curves:",title))
     print(pl)
-    # Add a table of AUPrRc.
-    auprrc <- make_AUPrRc_df(data)
-    
+    # Return a table of AUPrRc.
+    print(make_AUPrRc_df(data))
     },
     error = function(e) stop(paste("unable to plot Precision-Recall curves:",e))
   )
