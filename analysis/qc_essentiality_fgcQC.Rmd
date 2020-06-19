@@ -18,8 +18,8 @@ params:
 
 ```{r}
 suppressMessages(library(fgcQC))
-suppressMessages(library(knitr))
 suppressMessages(library(ggplot2))
+suppressMessages(library(gt))
 
 
 usage <- "rmarkdown::render('qc_essentiality_fgcQC.Rmd', \noutput_file = 'out.html', \nparams = list(fgc_QC_output_R_object = 'path/to/fgcQC-r-object.rds')"
@@ -43,14 +43,14 @@ cat(paste("Loaded 'fgcQC' output:\n",params$fgc_QC_output_R_object))
 ```{r, results="asis"}
 # Function library.
 
-#' make_AUROC_table
+#' make_AUROC_df
 #'
 #' Makes an AUROC data frame.
 #'
 #' @param data A data frame containing the following columns: `True_Positive_Rate`, `False_Positive_Rate`, and `gene_set`.
 #'
 #' @return A data frame of AUROCs.
-make_AUROC_table <- function(data){
+make_AUROC_df <- function(data){
   tryCatch({
     data_auroc <- data %>%
       dplyr::mutate(TP = !GENE %in% fgcQC::crispr_gene_sets$essential$hart_nonessential) %>%
@@ -58,20 +58,40 @@ make_AUROC_table <- function(data){
       dplyr::rename(AUROC = AUC) %>%
       dplyr::arrange(dplyr::desc(AUROC))
   },
-  error = function(e) stop(paste("unable to make AUROC table:",e))
+  error = function(e) stop(paste("unable to make AUROC data frame:",e))
   )
   return(data_auroc)
 }
 
 
-#' make_AUPrRc_table
+#' make_AUROC_table
+#'
+#' Makes an AUROC `gt` table for html printing.
+#'
+#' @param data A data frame containing the following columns: `True_Positive_Rate`, `False_Positive_Rate`, and `gene_set`.
+#' @param subtitle A subtitle for the table.
+#'
+#' @return A data frame of AUROCs.
+make_AUROC_table <- function(data, subtitle){
+  tryCatch({
+    data_gt <- data %>%
+      gt::gt() %>%
+      gt::tab_header(title = "", subtitle = subtitle)
+  },
+  error = function(e) stop(paste("unable to make AUROC gt table:",e))
+  )
+  return(data_auroc)
+}
+
+
+#' make_AUPrRc_df
 #'
 #' Makes an AUPrRc data frame.
 #'
 #' @param data A data frame containing the following columns: `Recall`, `Precision`, and `gene_set`.
 #'
 #' @return A data frame of AUPrRcs.
-make_AUPrRc_table <- function(data){
+make_AUPrRc_df <- function(data){
   tryCatch({
     data_auprrc <- data %>%
       dplyr::group_by(gene_set) %>%
@@ -79,7 +99,7 @@ make_AUPrRc_table <- function(data){
       dplyr::ungroup() %>%
       dplyr::arrange(dplyr::desc(AUPrRc))
   },
-  error = function(e) stop(paste("unable to make AUPrRc table:",e))
+  error = function(e) stop(paste("unable to make AUPrRc data frame:",e))
   )
   return(data_auprrc)
 }
@@ -101,8 +121,8 @@ plot_ROC_fgcQC <- function(data, title){
       ggtitle(paste("ROC curves:",title))
     print(pl)
     # Add a table of AUROCs.
-    auroc <- make_AUROC_table(data)
-    return(knitr::kable(auroc))
+    auroc <- make_AUROC_df(data)
+    
     },
     error = function(e) stop(paste("unable to plot ROC curves:",e))
   )
@@ -125,8 +145,8 @@ plot_PrRc_fgcQC <- function(data, title){
       ggtitle(paste("Precision-Recall curves:",title))
     print(pl)
     # Add a table of AUPrRc.
-    auprrc <- make_AUPrRc_table(data)
-    return(knitr::kable(auprrc))
+    auprrc <- make_AUPrRc_df(data)
+    
     },
     error = function(e) stop(paste("unable to plot Precision-Recall curves:",e))
   )
