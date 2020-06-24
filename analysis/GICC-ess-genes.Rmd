@@ -1,0 +1,272 @@
+---
+title: "Reproducibility of essential gene normalized counts in CRISPR screens"
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+set.seed(1)
+
+options(warn=-1)
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+suppressMessages(library(GICC))
+suppressMessages(library(zoo))
+
+select <- dplyr::select
+filter <- dplyr::filter
+
+data_root <- "~/data/az_cruk"
+load("../data/ess.genes.rda")
+load("~/git-projects/crispRutils/data/yusa.v1.crisprn.annot.rda")
+
+```
+
+# HT29 (Iorio)
+
+## Data
+
+Approach:
+
+* Take pairs of control replicates vs plasmid pairs so power is similar to actual screens, but the design is balanced.
+
+```{r}
+load_normalised_counts <- function(path){
+  load(path)
+  return(normed)
+}
+
+# Make paired data.
+make_paired <- function(comm, data, cnums, genes, incl_comm = TRUE){
+  data %<>% filter(gene %in% genes)
+  comm %<>% filter(gene %in% genes)
+  if(incl_comm){
+    ret <- data.frame(id = c(rep("plasmid",2),rep("control",2)), 
+                      t(cbind(comm[,3:4], data[,cnums])))
+  }else{
+    cnums <- c(3,cnums)
+    ret <- data.frame(id = c("plasmid",rep("control",2)), 
+                      t(data[,cnums]))
+  }
+  rownames(ret) <- NULL
+  return(ret)
+}
+
+build_gicc_df <- function(..., incl_comm = TRUE){
+  data_list <- list(...)
+  ret <- NULL
+  for(i in 1:length(data_list)){
+    data <- data_list[[i]]
+    screen_name <- gsub("^HT29_(c90\\d).*$","\\1",colnames(data)[4])
+    # 1. How many pairs of replicates can we make?
+    num_col <- sum(grepl("HT29",colnames(data)))
+    if(num_col==3) num_col <- 2
+    d <- 1:(min(c(num_col,8))) + 3
+    pairs <- split(d, ceiling(seq_along(d)/2))
+    # 2. Loop over all non-overlapping pairs.
+    for(j in 1:length(pairs)){
+      pair <- pairs[[j]]
+      # 3. Loop over all essential gene groups.
+      for(k in 1:length(ess.genes)){
+        ess <- ess.genes[[k]]
+        td <- make_paired(common, data, pair, ess, incl_comm = incl_comm)
+        ret <- rbind(ret, data.frame(screen = 
+                                  paste(screen_name,".",paste(pair-3,collapse="."),sep=""),
+                                  gene_group = names(ess.genes)[k], GICC = GICC(td)$GICC$GICC.1))
+      }
+    }
+  }
+  ret %<>%
+    group_by(gene_group) %>%
+    mutate(mdn = median(GICC)) %>%
+    ungroup() %>%
+    mutate(gene_group = factor(gene_group, levels = unique(gene_group[rev(order(mdn))])))
+  return(ret)
+}
+
+# Use 'cleanr' normalized data.
+path_ht29 <- file.path(data_root,"ht29-francesco-iorio","01_normalised_and_FCs")
+
+# Assemble the sgRNAs, genes, and the two plasmid count replicates.
+c903 <- load_normalised_counts(file.path(path_ht29,"HT29_c903.tsv_normCounts.RData"))
+c904 <- load_normalised_counts(file.path(path_ht29,"HT29_c904.tsv_normCounts.RData"))
+c905 <- load_normalised_counts(file.path(path_ht29,"HT29_c905.tsv_normCounts.RData"))
+c906 <- load_normalised_counts(file.path(path_ht29,"HT29_c906.tsv_normCounts.RData"))
+c907 <- load_normalised_counts(file.path(path_ht29,"HT29_c907.tsv_normCounts.RData"))
+c908 <- load_normalised_counts(file.path(path_ht29,"HT29_c908.tsv_normCounts.RData"))
+
+sgrna_comm <- Reduce(intersect, list(c903$sgRNA, c904$sgRNA, c905$sgRNA, c906$sgRNA, c907$sgRNA, c908$sgRNA))
+
+c903 %<>% filter(sgRNA %in% sgrna_comm)
+c904 %<>% filter(sgRNA %in% sgrna_comm)
+c905 %<>% filter(sgRNA %in% sgrna_comm)
+c906 %<>% filter(sgRNA %in% sgrna_comm)
+c907 %<>% filter(sgRNA %in% sgrna_comm)
+c908 %<>% filter(sgRNA %in% sgrna_comm)
+
+common <- data.frame(c903[,1:3], c905$CRISPR_C6596666.sample)
+colnames(common)[3:4] <- c("plasmid.1","plasmid.2")
+
+# Raw counts.
+path_ht29_raw <- file.path(data_root,"ht29-francesco-iorio","01_Counts assembled")
+c903.raw <- read.table(file.path(path_ht29_raw,"HT29_c903.tsv"), header=T, stringsAsFactors = F) %>%
+  filter(sgRNA %in% sgrna_comm)
+c904.raw <- read.table(file.path(path_ht29_raw,"HT29_c904.tsv"), header=T, stringsAsFactors = F) %>%
+  filter(sgRNA %in% sgrna_comm)
+c905.raw <- read.table(file.path(path_ht29_raw,"HT29_c905.tsv"), header=T, stringsAsFactors = F) %>%
+  filter(sgRNA %in% sgrna_comm)
+c906.raw <- read.table(file.path(path_ht29_raw,"HT29_c906.tsv"), header=T, stringsAsFactors = F) %>%
+  filter(sgRNA %in% sgrna_comm)
+c907.raw <- read.table(file.path(path_ht29_raw,"HT29_c907.tsv"), header=T, stringsAsFactors = F) %>%
+  filter(sgRNA %in% sgrna_comm)
+c908.raw <- read.table(file.path(path_ht29_raw,"HT29_c908.tsv"), header=T, stringsAsFactors = F) %>%
+  filter(sgRNA %in% sgrna_comm)
+
+```
+
+## GICC
+
+### Normalized counts (CRISPRcleanR)
+
+```{r}
+gicc.all.unpaired <- build_gicc_df(c903, c904, c905, c906, c907, c908, incl_comm = F) %>%
+  group_by(gene_group) %>%
+  mutate(gicc.rank = rank(GICC)) %>%
+  ungroup
+
+ggplot(gicc.all.unpaired, aes(gene_group,GICC,color=gene_group)) +
+  geom_point() +
+  geom_boxplot(fill=NA) +
+  geom_hline(yintercept = 0.6, linetype="dashed") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ggtitle("HT29 repeated screens: GICC by gene group - normalised counts")
+
+ggplot(gicc.all.unpaired, aes(gene_group,gicc.rank,group=screen,color=screen)) +
+  geom_point() +
+  geom_line() +
+  theme(axis.text.x = element_text(angle = -30, hjust = 0))
+
+# Normalize by gene group and compare individual screens,
+gicc.norm <- gicc.all.unpaired %>%
+  #filter(genes != "Spliceosome" & genes != "Proteasome") %>%
+  group_by(gene_group) %>%
+  mutate(gicc.scaled = scale(GICC)) %>%
+  ungroup %>%
+  group_by(screen) %>%
+  mutate(mdn.s = median(gicc.scaled)) %>%
+  ungroup %>%
+  mutate(screen = factor(screen, levels = unique(screen[rev(order(mdn.s))])))
+
+ggplot(gicc.norm, aes(screen,gicc.scaled, color=screen)) +
+  geom_point() +
+  geom_boxplot(fill=NA) +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+```
+
+### Raw counts
+
+```{r}
+gicc.all.unpaired.raw <- build_gicc_df(c903.raw, c904.raw, c905.raw, c906.raw, c907.raw, c908.raw, 
+                                       incl_comm = F) %>%
+  group_by(gene_group) %>%
+  mutate(gicc.rank = rank(GICC)) %>%
+  ungroup
+
+ggplot(gicc.all.unpaired.raw, aes(gene_group,GICC,color=gene_group)) +
+  geom_point() +
+  geom_boxplot(fill=NA) +
+  geom_hline(yintercept = 0.6, linetype="dashed") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ggtitle("HT29 repeated screens: GICC by gene group - raw counts")
+
+```
+
+### Number of transcripts hit
+
+```{r}
+# Sample groups of genes stratified by fold change:
+# Calculate GICC for sliding window of % of transcripts hit by the sgRNA (cuts occur 3bp upstream of PAM).
+prep_data_logfc <- function(data){
+  data %<>%
+    mutate(logfc = log2(apply(data[,4:ncol(data)],1,median)/data[,3]),
+           num_transcripts_hit = yusa.v1.crisprn.annot$num_transcripts_hit[match(sgRNA,yusa.v1.crisprn.annot$CODE)],
+           num_transcripts_not_hit = yusa.v1.crisprn.annot$num_transcripts_not_hit[match(sgRNA,yusa.v1.crisprn.annot$CODE)],
+           percent_transcripts_not_hit = yusa.v1.crisprn.annot$percent_transcripts_not_hit[match(sgRNA,yusa.v1.crisprn.annot$CODE)],
+           fc_group = case_when(logfc < (-1.5) ~ "< -1.5",
+                                between(logfc, -1.5,-0.4999) ~ "[-1.5,-0.5)",
+                                between(logfc,-0.5,0.5) ~ "[-0.5,0.5]",
+                                logfc > 0.5 ~ "> 0.5"))
+  return(data)
+}
+
+# Prep data for GICC.
+prep_gicc <- function(data){
+  nc <- sum(grepl("HT29",colnames(data))) + 3
+  ret <- data.frame(id = c("plasmid",rep("control",nc-3)), 
+                    t(data[,3:nc]))
+  return(ret)
+}
+
+# function called by sliding window.
+gicc_perc_tx_hit <- function(data, num_samps, num_guides=1000){
+  ret <- NULL
+  if(num_guides > nrow(data)){
+    num <- nrow(data)
+  }else{
+    num <- num_guides
+  }
+  for(i in 1:num_samps){
+    # Sample guides.
+    td <- data %>%
+      sample_n(num) %>%
+      arrange(percent_transcripts_not_hit)
+    # Get sliding window indices.
+    sw_indices <- zoo::rollapply(1:nrow(td), min(c(nrow(td),200)), function(x) x, by = 10)
+    for(j in 1:nrow(sw_indices)){
+      tryCatch({
+        mpth <- 100 - median(td$percent_transcripts_not_hit[sw_indices[j,]], na.rm = T)
+        gd <- prep_gicc(td[sw_indices[j,],])
+        ret <- rbind(ret, data.frame(median_percent_tx_hit = mpth,
+                                     GICC = GICC(gd)$GICC$GICC.1))
+      },
+      error = function(e) print(e))
+    }
+  }
+  return(ret)
+}
+
+swin <- function(data, num_samps){
+  ret <- data %>%
+    prep_data_logfc() %>%
+    filter(!is.na(percent_transcripts_not_hit)) %>%
+    group_by(fc_group) %>%
+    do(data.frame(gicc_perc_tx_hit(., num_samps)))
+  return(ret)
+}
+
+c903.gicc_swin.txh <- swin(c903, num_samps = 50)
+
+ggplot(c903.gicc_swin.txh,aes(logFC,GICC,color=logFC)) +
+  geom_boxplot() +
+  geom_point() +
+  geom_hline(yintercept = 0.6, linetype="dashed") +
+  ggtitle("HT29 c903: GICC by logFC group")
+
+
+```
+
+
+
