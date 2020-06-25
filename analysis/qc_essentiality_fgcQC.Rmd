@@ -17,6 +17,7 @@ params:
 # Setup
 
 ```{r}
+suppressMessages(library(dplyr))
 suppressMessages(library(fgcQC))
 suppressMessages(library(ggplot2))
 

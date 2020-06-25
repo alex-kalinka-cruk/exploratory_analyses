@@ -1,0 +1,138 @@
+---
+title: "QC metric correlation analysis"
+author: "Alex Kalinka"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    depth: 3
+    highlight: tango
+    number_sections: true
+    theme: spacelab
+    toc: true
+    toc_float: true
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+set.seed(1)
+
+options(warn=-1)
+suppressMessages(library(knitr))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+
+select <- dplyr::select
+filter <- dplyr::filter
+
+qc <- rbind(read.csv("~/Downloads/ppt/FGC_0004/FGC_0004_osimertinib_sensitivityH1975_osimertinib-qc-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/FGC_0004_osimertinib_sensitivityHCC2279_osimertinib_d10-qc-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/FGC_0004_osimertinib_sensitivityHCC2279_osimertinib_d7-qc-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/fgc_0005-RKO--fgcQC-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/fgc_0005-HT29--fgcQC-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/fgc_0005-HCT116--fgcQC-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/fgc_0005-SW480--fgcQC-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/fgc_0009-day7--fgcQC-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/fgc_0009-day17--fgcQC-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/fgc_0008-day7--fgcQC-out.csv",stringsAsFactors = F),read.csv("~/Downloads/ppt/FGC_0004/fgc_0008-day14--fgcQC-out.csv",stringsAsFactors = F)) %>%
+  mutate(project = ifelse(grepl("^FGC_",SampleName),
+                          gsub("^(FGC_....).*$","\\1",SampleName),
+                          gsub("^(FGC....).*$","\\1",SampleName)),
+         Day = ifelse(grepl("^.*? d(.*?) .*$",SampleLabel),
+                      gsub("^.*? d(\\d+?) .*$","\\1",SampleLabel),
+                      gsub("^.*?Day(\\d+?)_.*$","\\1",SampleLabel)))
+
+```
+
+# Correlations
+
+## AUPrRc
+
+```{r}
+qc %>%
+  filter(SampleClass != "plasmid") %>%
+  select(AUPrRc.ctrl_plasmid.pan_cancer_Sanger,
+         AUPrRc.ctrl_plasmid.hart_essential,
+         AUPrRc.ctrl_plasmid.moderately_negative,
+         AUPrRc.ctrl_plasmid.weakly_negative) %>%
+  rename(pan_cancer = AUPrRc.ctrl_plasmid.pan_cancer_Sanger,
+         hart_essential = AUPrRc.ctrl_plasmid.hart_essential,
+         moderately_negative = AUPrRc.ctrl_plasmid.moderately_negative,
+         weakly_negative = AUPrRc.ctrl_plasmid.weakly_negative) %>%
+  ggpairs() +
+  ggtitle("AUPrRc control vs plasmid: all current screens")
+
+qc %>%
+  filter(SampleClass == "control") %>%
+  ggplot(aes(AUPrRc.ctrl_plasmid.moderately_negative, AUPrRc.ctrl_plasmid.weakly_negative, 
+             color=project)) +
+  geom_point(cex=3) +
+  ggtitle("AUPrRc: weakly negative vs moderately negative")
+
+qc %>%
+  filter(SampleClass == "control") %>%
+  ggplot(aes(AUPrRc.ctrl_plasmid.moderately_negative, AUPrRc.ctrl_plasmid.weakly_negative, 
+             color=norm_counts_GCC_ratio)) +
+  geom_point(cex=3) +
+  ggtitle("AUPrRc: weakly negative vs moderately negative")
+
+qc %>%
+  filter(SampleClass == "control") %>%
+  ggplot(aes(AUPrRc.ctrl_plasmid.moderately_negative, AUPrRc.ctrl_plasmid.weakly_negative, 
+             color=dispersion_adj_gRNA.treat_ctrl)) +
+  geom_point(cex=3) +
+  ggtitle("AUPrRc: weakly negative vs moderately negative")
+
+qc %>%
+  filter(SampleClass == "control") %>%
+  ggplot(aes(AUPrRc.ctrl_plasmid.moderately_negative, AUPrRc.ctrl_plasmid.weakly_negative, 
+             color=repl_log2FC_pearson_corr.ctrl_plasmid)) +
+  geom_point(cex=3) +
+  ggtitle("AUPrRc: weakly negative vs moderately negative")
+
+qc %>%
+  ggplot(aes(SampleClass,norm_counts_GCC_ratio,color=project)) +
+  geom_point(position = position_dodge(width=0.75)) +
+  geom_boxplot()
+
+```
+
+## GICC
+
+```{r}
+qc %>%
+  filter(SampleClass != "plasmid") %>%
+  ggplot(aes(GICC.ctrl_plasmid.moderately_negative, GICC.ctrl_plasmid.weakly_negative, color=project)) +
+  geom_point()
+
+```
+
+## Reads and GC bias
+
+```{r}
+qc %>%
+  filter(SampleClass != "plasmid") %>%
+  ggplot(aes(NumberReads, distcorr_GC_content_counts)) +
+  geom_point() +
+  geom_point(data = qc %>% filter(project=="FGC_0004"), 
+             aes(NumberReads, distcorr_GC_content_counts, color="FGC_0004")) +
+  geom_smooth(method="lm") +
+  ggtitle("GC bias vs per-sample Number of Reads")
+
+qc %>%
+  filter(SampleClass != "plasmid") %>%
+  ggplot(aes(norm_counts_GCC_ratio, dispersion_adj_gRNA.treat_ctrl, color=project)) +
+  geom_point()
+
+qc %>%
+  filter(SampleClass != "plasmid") %>%
+  ggplot(aes(NumberReads,norm_counts_GCC_ratio, color=project)) +
+  geom_point()
+
+qc %>%
+  filter(SampleClass != "plasmid") %>%
+  ggplot(aes(gini_coefficient_counts,norm_counts_GCC_ratio, color=project)) +
+  geom_point()
+
+qc %>%
+  filter(SampleClass != "plasmid") %>%
+  ggplot(aes(gini_coefficient_counts,distcorr_GC_content_counts, color=project)) +
+  geom_point()
+
+```
+
+
