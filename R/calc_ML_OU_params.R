@@ -45,9 +45,11 @@
 #' 
 calc_MLE_OU_lfc <- function(lfc, ts){
   beta1 <- .calc_beta1(lfc)
-  theta <- .calc_theta(lfc, ts)
+  theta <- .calc_theta(lfc, beta1, ts)
   mu <- .calc_mu(lfc, beta1)
   sigma <- .calc_sigma(lfc, beta1, theta, mu)
-  return(data.frame(theta = theta, mu = mu, sigma = sigma))
+  # sigma depends upon mu, so if we assume mu=0 need to re-calculate sigma.
+  sigma_h0 <- .calc_sigma(lfc, beta1, theta, 0)
+  return(data.frame(theta = theta, mu = mu, sigma = sigma, sigma_h0 = sigma_h0))
 }
 
