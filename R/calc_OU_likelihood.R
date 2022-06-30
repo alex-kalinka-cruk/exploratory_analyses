@@ -5,6 +5,7 @@
 }
 
 .calc_L_second_term <- function(lfc, ts, theta, mu, sigma){
+  n <- length(lfc)
   x <- lfc
   xm <- c(0,lfc[1:(n-1)])
   # Use mean time step delta.
