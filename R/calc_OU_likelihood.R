@@ -11,7 +11,7 @@
   # Use mean time step delta.
   delta <- mean(diff(ts))
   mu_cond <- xm*exp(-theta*delta) + mu*(1-exp(-theta*delta))
-  wb <- (1/sigma)*sqrt(2*theta*(1/(1-exp(-2*theta*delta))))*(x - mu_cond)
+  wb <- (1/sigma)*sqrt(1/(2*theta*((1-exp(-2*theta*delta)))))*(x - mu_cond)
   st <- prod(stats::dnorm(wb))
   return(st)
 }
